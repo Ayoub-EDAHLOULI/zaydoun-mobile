@@ -173,7 +173,7 @@ export default function LoginScreen() {
 
     try {
       await login({ email: email.trim(), password });
-      router.replace("/(tabs)" as "/");
+      router.replace("/(tabs)/library" as "/");
     } catch (err) {
       setServerError(err instanceof Error ? err.message : "Login failed");
       shake();
@@ -293,15 +293,12 @@ export default function LoginScreen() {
                 style={s.submitBtnWrapper}
               >
                 <LinearGradient
-                  colors={
-                    isLoading
-                      ? ["rgba(201,168,76,0.35)", "rgba(160,124,48,0.35)"]
-                      : [COLORS.primary, COLORS.secondary]
-                  }
+                  colors={[COLORS.primary, COLORS.secondary]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={s.submitBtnGradient}
                 >
+                  {isLoading && <View style={s.submitDim} />}
                   <Text style={s.submitText}>
                     {isLoading ? "Signing in…" : "Sign In"}
                   </Text>
@@ -422,6 +419,11 @@ const s = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 6,
+  },
+  submitDim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    borderRadius: 14,
   },
   submitText: {
     color: "#0d0d0d",

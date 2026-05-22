@@ -84,7 +84,7 @@ export default function AuthProvider({
       setAccessTokenStore(null);
       setAccessToken(null);
       setUser(null);
-      router.replace("/login");
+      router.replace("/(auth)/login" as "/");
     }
   }, []);
 
