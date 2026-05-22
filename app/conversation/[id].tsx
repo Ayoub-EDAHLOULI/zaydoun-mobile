@@ -1,8 +1,10 @@
 import { Audio } from "expo-av";
+import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, router } from "expo-router";
 import {
   ArrowLeft,
+  Check,
   Keyboard,
   Mic,
   MicOff,
@@ -48,8 +50,70 @@ const COLORS = {
 
 type RecordingState = "idle" | "recording" | "processing";
 
+function CopiedPopup({ visible }: { visible: boolean }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(8)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.spring(translateY, {
+          toValue: 0,
+          friction: 12,
+          tension: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 8,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible, opacity, translateY]);
+
+  return (
+    <Animated.View
+      style={[mb.copiedPopup, { opacity, transform: [{ translateY }] }]}
+    >
+      <LinearGradient
+        colors={["#c9a84c", "#a07c30"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={mb.copiedGradient}
+      >
+        <Check color="#0d0d0d" size={12} strokeWidth={3} />
+        <Text style={mb.copiedText}>Copied</Text>
+      </LinearGradient>
+    </Animated.View>
+  );
+}
+
 function MessageBubble({ message }: { message: MessageData }) {
   const isUser = message.role === "user";
+  const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleLongPress = async () => {
+    await Clipboard.setStringAsync(message.content);
+    setCopied(true);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => setCopied(false), 1800);
+  };
+
   return (
     <View style={[mb.row, isUser ? mb.rowUser : mb.rowAI]}>
       {!isUser && (
@@ -57,10 +121,22 @@ function MessageBubble({ message }: { message: MessageData }) {
           <Text style={mb.avatarText}>Z</Text>
         </View>
       )}
-      <View style={[mb.bubble, isUser ? mb.bubbleUser : mb.bubbleAI]}>
-        <Text style={[mb.text, isUser ? mb.textUser : mb.textAI]}>
-          {message.content}
-        </Text>
+      <View style={mb.bubbleWrap}>
+        <CopiedPopup visible={copied} />
+        <Pressable
+          onLongPress={handleLongPress}
+          delayLongPress={350}
+          android_ripple={null}
+          style={({ pressed }) => [
+            mb.bubble,
+            isUser ? mb.bubbleUser : mb.bubbleAI,
+            pressed && { opacity: 0.75 },
+          ]}
+        >
+          <Text style={[mb.text, isUser ? mb.textUser : mb.textAI]}>
+            {message.content}
+          </Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -87,8 +163,9 @@ const mb = StyleSheet.create({
     marginBottom: 2,
   },
   avatarText: { color: COLORS.primary, fontSize: 12, fontWeight: "800" },
+  bubbleWrap: { maxWidth: "75%", alignItems: "center" },
   bubble: {
-    maxWidth: "75%",
+    width: "100%",
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 16,
@@ -108,6 +185,31 @@ const mb = StyleSheet.create({
   text: { fontSize: 14, lineHeight: 21, fontWeight: "500" },
   textUser: { color: COLORS.text },
   textAI: { color: COLORS.textMuted },
+  copiedPopup: {
+    position: "absolute",
+    top: -36,
+    zIndex: 10,
+    borderRadius: 20,
+    overflow: "hidden",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  copiedGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  copiedText: {
+    color: "#0d0d0d",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
 });
 
 export default function ConversationScreen() {
