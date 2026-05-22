@@ -324,7 +324,12 @@ export default function LoginScreen() {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 48 },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingBottom: 48,
+    paddingTop: 16,
+  },
   backBtn: { paddingTop: 12, paddingBottom: 4, alignSelf: "flex-start" },
   backText: { color: COLORS.textDisabled, fontSize: 14, fontWeight: "600" },
   header: { alignItems: "center", paddingTop: 28, paddingBottom: 32, gap: 12 },
