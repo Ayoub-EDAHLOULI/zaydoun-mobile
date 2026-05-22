@@ -29,6 +29,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import { conversationsService } from "@/lib/api/services/conversations.service";
 import { API_CONFIG } from "@/lib/api/config";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { ConversationDetail, MessageData } from "@/types/conversations.types";
 
 const COLORS = {
@@ -214,6 +215,7 @@ const mb = StyleSheet.create({
 
 export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { replyLanguage } = useLanguage();
   const [conversation, setConversation] = useState<ConversationDetail | null>(
     null,
   );
@@ -310,7 +312,7 @@ export default function ConversationScreen() {
       recordingRef.current = null;
       if (!uri) throw new Error("No audio URI");
 
-      const result = await conversationsService.talk(id, uri);
+      const result = await conversationsService.talk(id, uri, replyLanguage.code);
 
       // Show user transcript immediately, then AI reply
       const userMsg: MessageData = {
@@ -377,7 +379,7 @@ export default function ConversationScreen() {
     appendMessages(tempUserMsg);
 
     try {
-      const result = await conversationsService.chat(id, content);
+      const result = await conversationsService.chat(id, content, replyLanguage.code);
       // Replace temp user msg with real one, then append AI reply
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== tempUserMsg.id),

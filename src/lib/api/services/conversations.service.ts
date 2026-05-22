@@ -30,17 +30,18 @@ export const conversationsService = {
     return apiClient.post<MessageData>(`${CONV}/${id}/messages`, data);
   },
 
-  chat(id: string, message: string): Promise<ChatResult> {
-    return apiClient.post<ChatResult>(`${CONV}/${id}/chat`, { message });
+  chat(id: string, message: string, languageCode?: string): Promise<ChatResult> {
+    return apiClient.post<ChatResult>(`${CONV}/${id}/chat`, { message, languageCode });
   },
 
-  talk(id: string, audioUri: string): Promise<TalkResult> {
+  talk(id: string, audioUri: string, languageCode?: string): Promise<TalkResult> {
     const form = new FormData();
     form.append("audio", {
       uri: audioUri,
       name: "voice.m4a",
       type: "audio/m4a",
     } as unknown as Blob);
+    if (languageCode) form.append("languageCode", languageCode);
     return apiClient.post<TalkResult>(
       `${CONV}/${id}/talk`,
       form,

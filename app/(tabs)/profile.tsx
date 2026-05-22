@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { BookOpen, Calendar, LogOut, Mail, User } from "lucide-react-native";
+import { BookOpen, Calendar, Languages, LogOut, Mail, User } from "lucide-react-native";
 import {
   Alert,
   ScrollView,
@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
+import { LANGUAGES, useLanguage } from "@/contexts/LanguageContext";
 
 const COLORS = {
   background: "#0d0d0d",
@@ -47,6 +48,7 @@ function InfoRow({
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+  const { replyLanguage, setReplyLanguage } = useLanguage();
 
   const initials = user?.name
     ? user.name
@@ -138,6 +140,46 @@ export default function ProfileScreen() {
               label="Member Since"
               value={memberSince}
             />
+          </View>
+        </View>
+
+        {/* Reply Language */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Zaydoun Replies In</Text>
+          <View style={s.card}>
+            <View style={s.langHeader}>
+              <View style={s.infoIcon}>
+                <Languages color={COLORS.textDisabled} size={16} strokeWidth={1.8} />
+              </View>
+              <View style={s.infoText}>
+                <Text style={s.infoLabel}>Reply Language</Text>
+                <Text style={s.infoValue}>
+                  {replyLanguage.flag}  {replyLanguage.label}
+                </Text>
+              </View>
+            </View>
+            <View style={s.divider} />
+            <View style={s.langGrid}>
+              {LANGUAGES.map((lang) => {
+                const active = lang.code === replyLanguage.code;
+                return (
+                  <TouchableOpacity
+                    key={lang.code}
+                    style={[s.langChip, active && s.langChipActive]}
+                    onPress={() => setReplyLanguage(lang)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={s.langFlag}>{lang.flag}</Text>
+                    <Text style={[s.langLabel, active && s.langLabelActive]}>
+                      {lang.label}
+                    </Text>
+                    <Text style={[s.langNative, active && s.langNativeActive]}>
+                      {lang.nativeLabel}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         </View>
 
@@ -273,6 +315,50 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.border,
     marginLeft: 60,
   },
+  langHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  langGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    padding: 14,
+  },
+  langChip: {
+    flexDirection: "column",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surfaceAlt,
+    gap: 3,
+    minWidth: 68,
+  },
+  langChipActive: {
+    borderColor: "rgba(201,168,76,0.45)",
+    backgroundColor: "rgba(201,168,76,0.08)",
+  },
+  langFlag: { fontSize: 20 },
+  langLabel: {
+    color: COLORS.textDisabled,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  langLabelActive: { color: COLORS.primary },
+  langNative: {
+    color: COLORS.textDisabled,
+    fontSize: 10,
+    fontWeight: "500",
+    opacity: 0.7,
+  },
+  langNativeActive: { color: COLORS.primary, opacity: 0.8 },
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",
