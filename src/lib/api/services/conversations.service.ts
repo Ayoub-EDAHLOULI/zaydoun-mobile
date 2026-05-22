@@ -6,6 +6,7 @@ import {
   CreateConversationDto,
   AddMessageDto,
   MessageData,
+  TalkResult,
 } from "@/types/conversations.types";
 
 const CONV = API_CONFIG.ENDPOINTS.CONVERSATIONS;
@@ -26,6 +27,21 @@ export const conversationsService = {
 
   addMessage(id: string, data: AddMessageDto): Promise<MessageData> {
     return apiClient.post<MessageData>(`${CONV}/${id}/messages`, data);
+  },
+
+  talk(id: string, audioUri: string): Promise<TalkResult> {
+    const form = new FormData();
+    form.append("audio", {
+      uri: audioUri,
+      name: "voice.m4a",
+      type: "audio/m4a",
+    } as unknown as Blob);
+    return apiClient.post<TalkResult>(
+      `${CONV}/${id}/talk`,
+      form,
+      undefined,
+      true,
+    );
   },
 
   delete(id: string): Promise<void> {

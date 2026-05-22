@@ -41,3 +41,9 @@ export interface AddMessageDto {
   sourcePage?: number;
   audioPath?: string;
 }
+
+export interface TalkResult {
+  userText: string;
+  aiMessage: MessageData;
+  audioUrl: string;
+}

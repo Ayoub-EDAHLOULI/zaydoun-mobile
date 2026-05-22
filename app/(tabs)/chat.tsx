@@ -1,18 +1,80 @@
-import { View, Text, StyleSheet } from "react-native";
+import { router } from "expo-router";
+import { MessageCircle } from "lucide-react-native";
+import { useEffect, useRef } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { conversationsService } from "@/lib/api/services/conversations.service";
 
-export default function ChatScreen() {
+// When the user taps the Chat tab, send them straight to their most recent conversation.
+// If none exists, nudge them to the library to start one.
+export default function ChatTab() {
+  const didNavigate = useRef(false);
+
+  useEffect(() => {
+    if (didNavigate.current) return;
+
+    (async () => {
+      try {
+        const list = await conversationsService.list();
+        if (list.length > 0) {
+          didNavigate.current = true;
+          router.replace(`/conversation/${list[0].id}` as "/");
+        }
+        // If empty, fall through to the "no conversations" UI below
+      } catch {
+        // silent — show the empty state
+      }
+    })();
+  }, []);
+
   return (
-    <SafeAreaView style={s.container} edges={["top", "left", "right"]}>
-      <View style={s.content}>
-        <Text style={s.text}>Chat</Text>
+    <SafeAreaView style={s.safe} edges={["top", "left", "right"]}>
+      <View style={s.center}>
+        <View style={s.iconWrap}>
+          <MessageCircle color="#6b6560" size={40} strokeWidth={1.2} />
+        </View>
+        <Text style={s.title}>No conversations yet</Text>
+        <Text style={s.subtitle}>
+          Tap <Text style={s.highlight}>Discuss</Text> on a ready book in your
+          library to start talking with Zaydoun.
+        </Text>
       </View>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0d0d0d" },
-  content: { flex: 1, alignItems: "center", justifyContent: "center" },
-  text: { color: "#6b6560", fontSize: 16, fontWeight: "600", letterSpacing: 1 },
+  safe: { flex: 1, backgroundColor: "#0d0d0d" },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 40,
+    gap: 12,
+  },
+  iconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: "#1a1a1a",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  title: {
+    color: "#c4bdb0",
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  subtitle: {
+    color: "#6b6560",
+    fontSize: 14,
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  highlight: { color: "#c9a84c", fontWeight: "700" },
 });

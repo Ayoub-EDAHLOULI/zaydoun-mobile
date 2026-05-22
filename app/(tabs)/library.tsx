@@ -6,6 +6,7 @@ import {
   CheckCircle,
   Clock,
   FileText,
+  MessageCircle,
   Plus,
   RefreshCw,
   Trash2,
@@ -13,6 +14,7 @@ import {
   X,
 } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { router } from "expo-router";
 import {
   Animated,
   Modal,
@@ -84,10 +86,12 @@ function BookCard({
   book,
   onDelete,
   onProcess,
+  onDiscuss,
 }: {
   book: BookSummary;
   onDelete: (id: string, title: string) => void;
   onProcess: (id: string, title: string) => void;
+  onDiscuss: (bookId: string) => void;
 }) {
   const status = STATUS_CONFIG[book.status];
   const isReady = book.status === "READY";
@@ -128,6 +132,15 @@ function BookCard({
       </View>
 
       <View style={bc.actions}>
+        {isReady && (
+          <TouchableOpacity
+            style={bc.discussBtn}
+            onPress={() => onDiscuss(book.id)}
+            hitSlop={8}
+          >
+            <MessageCircle size={15} color={COLORS.primary} strokeWidth={2} />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[bc.actionBtn, isProcessing && { opacity: 0.35 }]}
           onPress={() => onProcess(book.id, book.title)}
@@ -185,6 +198,16 @@ const bc = StyleSheet.create({
   statusText: { fontSize: 11, fontWeight: "700" },
   pages: { color: COLORS.textDisabled, fontSize: 11, fontWeight: "500" },
   actions: { flexDirection: "row", gap: 4 },
+  discussBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "rgba(201,168,76,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(201,168,76,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   actionBtn: {
     width: 32,
     height: 32,
@@ -361,6 +384,10 @@ export default function LibraryScreen() {
     setProcessTarget({ id, title: bookTitle });
   };
 
+  const handleDiscuss = (bookId: string) => {
+    router.push(`/conversation?bookId=${bookId}` as "/");
+  };
+
   const confirmProcess = async () => {
     if (!processTarget) return;
     const { id, title: bookTitle } = processTarget;
@@ -461,6 +488,7 @@ export default function LibraryScreen() {
               book={book}
               onDelete={handleDelete}
               onProcess={handleProcess}
+              onDiscuss={handleDiscuss}
             />
           ))
         )}
