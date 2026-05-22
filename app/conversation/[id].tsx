@@ -312,7 +312,11 @@ export default function ConversationScreen() {
       recordingRef.current = null;
       if (!uri) throw new Error("No audio URI");
 
-      const result = await conversationsService.talk(id, uri, replyLanguage.code);
+      const result = await conversationsService.talk(
+        id,
+        uri,
+        replyLanguage.code,
+      );
 
       // Show user transcript immediately, then AI reply
       const userMsg: MessageData = {
@@ -379,11 +383,15 @@ export default function ConversationScreen() {
     appendMessages(tempUserMsg);
 
     try {
-      const result = await conversationsService.chat(id, content, replyLanguage.code);
+      const result = await conversationsService.chat(
+        id,
+        content,
+        replyLanguage.code,
+      );
       // Replace temp user msg with real one, then append AI reply
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== tempUserMsg.id),
-        { ...tempUserMsg, id: `u-${Date.now()}`, content: result.userText },
+        { ...tempUserMsg, id: `u-${Date.now()}` },
         result.aiMessage,
       ]);
       setTimeout(scrollToBottom, 100);
