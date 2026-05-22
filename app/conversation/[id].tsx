@@ -646,12 +646,12 @@ const s = StyleSheet.create({
 
   // Voice area
   voiceArea: {
-    paddingVertical: 24,
-    paddingBottom: 32,
+    paddingVertical: 28,
+    paddingBottom: 52,
     alignItems: "center",
     justifyContent: "center",
   },
-  idleRow: { alignItems: "center", gap: 14 },
+  idleRow: { alignItems: "center", gap: 18 },
   idleHint: {
     color: COLORS.textDisabled,
     fontSize: 12,
@@ -675,7 +675,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  processingWrap: { alignItems: "center", paddingVertical: 12 },
+  processingWrap: { alignItems: "center", paddingVertical: 20 },
   processingText: {
     color: COLORS.primary,
     fontSize: 14,
