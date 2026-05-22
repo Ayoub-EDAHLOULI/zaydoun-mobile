@@ -7,6 +7,7 @@ import {
   AddMessageDto,
   MessageData,
   TalkResult,
+  ChatResult,
 } from "@/types/conversations.types";
 
 const CONV = API_CONFIG.ENDPOINTS.CONVERSATIONS;
@@ -27,6 +28,10 @@ export const conversationsService = {
 
   addMessage(id: string, data: AddMessageDto): Promise<MessageData> {
     return apiClient.post<MessageData>(`${CONV}/${id}/messages`, data);
+  },
+
+  chat(id: string, message: string): Promise<ChatResult> {
+    return apiClient.post<ChatResult>(`${CONV}/${id}/chat`, { message });
   },
 
   talk(id: string, audioUri: string): Promise<TalkResult> {

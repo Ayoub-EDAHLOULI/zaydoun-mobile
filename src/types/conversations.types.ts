@@ -47,3 +47,8 @@ export interface TalkResult {
   aiMessage: MessageData;
   audioUrl: string;
 }
+
+export interface ChatResult {
+  userText: string;
+  aiMessage: MessageData;
+}

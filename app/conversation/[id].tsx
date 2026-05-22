@@ -264,23 +264,25 @@ export default function ConversationScreen() {
     setSending(true);
     setTextInput("");
     try {
-      // Save user message
-      const userMsg = await conversationsService.addMessage(id, {
-        role: "user",
-        content,
-      });
-      appendMessages(userMsg);
-
-      // Get AI reply via text — embed + RAG + GPT path on backend
-      // For now we send as a regular message; voice-only AI path requires audio.
-      // Display a hint that voice gets a spoken response.
+      const result = await conversationsService.chat(id, content);
+      appendMessages(
+        {
+          id: `u-${Date.now()}`,
+          conversationId: id,
+          role: "user",
+          content: result.userText,
+          sourcePage: null,
+          audioPath: null,
+          createdAt: new Date().toISOString(),
+        },
+        result.aiMessage,
+      );
+    } catch (err) {
       Toast.show({
-        type: "success",
-        text1: "Message sent",
-        text2: "Use the mic for a spoken reply from Zaydoun",
+        type: "error",
+        text1: "Failed",
+        text2: err instanceof Error ? err.message : "Could not send message",
       });
-    } catch {
-      Toast.show({ type: "error", text1: "Failed to send message" });
     } finally {
       setSending(false);
     }
