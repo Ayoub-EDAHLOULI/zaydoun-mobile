@@ -99,7 +99,8 @@ export async function fetchWithAuth<T>(
     try {
       const body = JSON.parse(text) as { message?: string };
       throw new Error(body.message || response.statusText);
-    } catch {
+    } catch (e) {
+      if (e instanceof Error && e.message !== text) throw e;
       throw new Error(text || response.statusText);
     }
   }

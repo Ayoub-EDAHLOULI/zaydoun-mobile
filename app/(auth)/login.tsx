@@ -7,7 +7,6 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -171,11 +170,6 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     setServerError(null);
-    Animated.timing(buttonScale, {
-      toValue: 0.97,
-      duration: 100,
-      useNativeDriver: true,
-    }).start();
 
     try {
       await login({ email: email.trim(), password });
@@ -185,11 +179,6 @@ export default function LoginScreen() {
       shake();
     } finally {
       setIsLoading(false);
-      Animated.timing(buttonScale, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }).start();
     }
   };
 
@@ -291,12 +280,17 @@ export default function LoginScreen() {
             />
 
             <Animated.View
-              style={{ transform: [{ scale: buttonScale }], marginTop: 4 }}
+              style={{
+                transform: [{ scale: buttonScale }],
+                marginTop: 4,
+                alignItems: "center",
+              }}
             >
-              <Pressable
+              <TouchableOpacity
                 onPress={handleSubmit}
                 disabled={isLoading}
-                style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+                activeOpacity={0.75}
+                style={s.submitBtnWrapper}
               >
                 <LinearGradient
                   colors={
@@ -306,13 +300,13 @@ export default function LoginScreen() {
                   }
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  style={s.submitBtn}
+                  style={s.submitBtnGradient}
                 >
                   <Text style={s.submitText}>
                     {isLoading ? "Signing in…" : "Sign In"}
                   </Text>
                 </LinearGradient>
-              </Pressable>
+              </TouchableOpacity>
             </Animated.View>
           </Animated.View>
 
@@ -444,4 +438,20 @@ const s = StyleSheet.create({
     lineHeight: 22,
   },
   footerAccent: { color: COLORS.textMuted, fontWeight: "600" },
+  submitBtnWrapper: {
+    width: width - 96,
+    borderRadius: 14,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  submitBtnGradient: {
+    paddingVertical: 17,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
 });
