@@ -6,5 +6,6 @@ export const API_CONFIG = {
   BASE_URL: API_URL,
   ENDPOINTS: {
     AUTH: "/auth",
+    BOOKS: "/books",
   },
 };
