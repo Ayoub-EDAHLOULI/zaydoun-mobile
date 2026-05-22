@@ -213,6 +213,120 @@ const mb = StyleSheet.create({
   },
 });
 
+// Maps dBFS (–160..0) to 0..1, biased so quiet still shows minimal movement
+function dbToLevel(db: number): number {
+  const clamped = Math.max(-60, Math.min(0, db));
+  return (clamped + 60) / 60;
+}
+
+const BAR_COUNT = 5;
+// Stagger heights so the bars look like a natural waveform arch
+const BAR_BASE = [0.25, 0.5, 1.0, 0.5, 0.25];
+
+function VoiceBars({ volumeAnim }: { volumeAnim: Animated.Value }) {
+  return (
+    <View style={viz.row}>
+      {BAR_BASE.map((base, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            viz.bar,
+            {
+              backgroundColor: COLORS.primary,
+              transform: [
+                {
+                  scaleY: volumeAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [base * 0.3 + 0.05, base * 1.0 + 0.05],
+                    extrapolate: "clamp",
+                  }),
+                },
+              ],
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+function PlaybackBars({ isPlaying }: { isPlaying: boolean }) {
+  const anims = useRef(
+    Array.from({ length: BAR_COUNT }, () => new Animated.Value(0.15)),
+  ).current;
+
+  useEffect(() => {
+    if (!isPlaying) {
+      anims.forEach((a) => {
+        a.stopAnimation();
+        Animated.timing(a, {
+          toValue: 0.15,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      });
+      return;
+    }
+    // Each bar loops with a unique phase offset
+    const loops = anims.map((anim, i) => {
+      const duration = 400 + i * 80;
+      const peak = BAR_BASE[i];
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: peak,
+            duration,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0.15,
+            duration,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+    });
+    // Stagger start so bars are out of phase
+    loops.forEach((loop, i) => setTimeout(() => loop.start(), i * 90));
+    return () => loops.forEach((l) => l.stop());
+  }, [isPlaying, anims]);
+
+  return (
+    <View style={viz.row}>
+      {anims.map((anim, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            viz.bar,
+            {
+              backgroundColor: COLORS.primary,
+              opacity: 0.85,
+              transform: [{ scaleY: anim }],
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+const viz = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    height: 40,
+  },
+  bar: {
+    width: 4,
+    height: 32,
+    borderRadius: 3,
+  },
+});
+
 export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { replyLanguage } = useLanguage();
@@ -227,6 +341,8 @@ export default function ConversationScreen() {
 
   const recordingRef = useRef<Audio.Recording | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const volumeAnim = useRef(new Animated.Value(0)).current;
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   // Load conversation
@@ -266,8 +382,10 @@ export default function ConversationScreen() {
     } else {
       pulseAnim.stopAnimation();
       pulseAnim.setValue(1);
+      volumeAnim.stopAnimation();
+      volumeAnim.setValue(0);
     }
-  }, [recordingState, pulseAnim]);
+  }, [recordingState, pulseAnim, volumeAnim]);
 
   const scrollToBottom = useCallback(() => {
     flatListRef.current?.scrollToEnd({ animated: true });
@@ -294,7 +412,18 @@ export default function ConversationScreen() {
         playsInSilentModeIOS: true,
       });
       const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        { ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true },
+        (status) => {
+          if (status.isRecording && status.metering != null) {
+            Animated.timing(volumeAnim, {
+              toValue: dbToLevel(status.metering),
+              duration: 80,
+              easing: Easing.out(Easing.ease),
+              useNativeDriver: true,
+            }).start();
+          }
+        },
+        80,
       );
       recordingRef.current = recording;
       setRecordingState("recording");
@@ -337,9 +466,13 @@ export default function ConversationScreen() {
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
       });
+      setIsPlayingAudio(true);
       await sound.playAsync();
       sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
+        if (status.isLoaded && status.didJustFinish) {
+          setIsPlayingAudio(false);
+          sound.unloadAsync();
+        }
       });
     } catch (err) {
       Toast.show({
@@ -510,30 +643,39 @@ export default function ConversationScreen() {
                 <MicOff color={COLORS.error} size={20} strokeWidth={2} />
               </TouchableOpacity>
 
-              {/* Pulsing mic */}
-              <Animated.View
-                style={[s.micOuter, { transform: [{ scale: pulseAnim }] }]}
-              >
-                <TouchableOpacity
-                  style={s.micInner}
-                  onPress={stopAndSend}
-                  activeOpacity={0.85}
+              {/* Mic + live waveform */}
+              <View style={s.micWithBars}>
+                <VoiceBars volumeAnim={volumeAnim} />
+                <Animated.View
+                  style={[s.micOuter, s.micOuterRecording, { transform: [{ scale: pulseAnim }] }]}
                 >
-                  <LinearGradient
-                    colors={["#e05c5c", "#b03e3e"]}
-                    style={s.micGradient}
+                  <TouchableOpacity
+                    style={s.micInner}
+                    onPress={stopAndSend}
+                    activeOpacity={0.85}
                   >
-                    <Square
-                      color="#fff"
-                      size={22}
-                      strokeWidth={2.5}
-                      fill="#fff"
-                    />
-                  </LinearGradient>
-                </TouchableOpacity>
-              </Animated.View>
+                    <LinearGradient
+                      colors={["#e05c5c", "#b03e3e"]}
+                      style={s.micGradient}
+                    >
+                      <Square
+                        color="#fff"
+                        size={22}
+                        strokeWidth={2.5}
+                        fill="#fff"
+                      />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </Animated.View>
+                <VoiceBars volumeAnim={volumeAnim} />
+              </View>
 
               <Text style={s.recordingHint}>Tap to stop</Text>
+            </View>
+          ) : isPlayingAudio ? (
+            <View style={s.idleRow}>
+              <PlaybackBars isPlaying={true} />
+              <Text style={s.playingHint}>Zaydoun is speaking…</Text>
             </View>
           ) : (
             <View style={s.idleRow}>
@@ -681,6 +823,22 @@ const s = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     letterSpacing: 0.3,
+  },
+
+  micWithBars: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  micOuterRecording: {
+    borderColor: "rgba(224,92,92,0.35)",
+    backgroundColor: "rgba(224,92,92,0.08)",
+  },
+  playingHint: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
 
   // Mic button
