@@ -87,11 +87,11 @@ function BookCard({
 }: {
   book: BookSummary;
   onDelete: (id: string, title: string) => void;
-  onProcess: (id: string) => void;
+  onProcess: (id: string, title: string) => void;
 }) {
   const status = STATUS_CONFIG[book.status];
   const isReady = book.status === "READY";
-  const isFailed = book.status === "FAILED";
+  const isProcessing = book.status === "PROCESSING";
 
   return (
     <View style={bc.card}>
@@ -128,15 +128,14 @@ function BookCard({
       </View>
 
       <View style={bc.actions}>
-        {isFailed && (
-          <TouchableOpacity
-            style={bc.actionBtn}
-            onPress={() => onProcess(book.id)}
-            hitSlop={8}
-          >
-            <RefreshCw size={15} color={COLORS.warning} strokeWidth={2} />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[bc.actionBtn, isProcessing && { opacity: 0.35 }]}
+          onPress={() => onProcess(book.id, book.title)}
+          disabled={isProcessing}
+          hitSlop={8}
+        >
+          <RefreshCw size={15} color={COLORS.warning} strokeWidth={2} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={bc.actionBtn}
           onPress={() => onDelete(book.id, book.title)}
@@ -204,6 +203,12 @@ export default function LibraryScreen() {
 
   // Delete confirm state
   const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+
+  // Process confirm state
+  const [processTarget, setProcessTarget] = useState<{
     id: string;
     title: string;
   } | null>(null);
@@ -352,7 +357,14 @@ export default function LibraryScreen() {
     }
   };
 
-  const handleProcess = async (id: string) => {
+  const handleProcess = (id: string, bookTitle: string) => {
+    setProcessTarget({ id, title: bookTitle });
+  };
+
+  const confirmProcess = async () => {
+    if (!processTarget) return;
+    const { id, title: bookTitle } = processTarget;
+    setProcessTarget(null);
     try {
       await booksService.process(id);
       setBooks((prev) =>
@@ -363,19 +375,28 @@ export default function LibraryScreen() {
       Toast.show({
         type: "success",
         text1: "Processing started",
-        text2: "Book is being re-processed",
+        text2: `"${bookTitle}" is being processed`,
       });
     } catch {
       Toast.show({
         type: "error",
         text1: "Failed",
-        text2: "Could not restart processing.",
+        text2: "Could not start processing.",
       });
     }
   };
 
   return (
     <SafeAreaView style={s.safe} edges={["top", "left", "right"]}>
+      <ConfirmModal
+        visible={!!processTarget}
+        title="Process Book"
+        message={`Start processing "${processTarget?.title}"? This will re-index the book.`}
+        confirmLabel="Process"
+        variant="warning"
+        onConfirm={confirmProcess}
+        onCancel={() => setProcessTarget(null)}
+      />
       <ConfirmModal
         visible={!!deleteTarget}
         title="Delete Book"
