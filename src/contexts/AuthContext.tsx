@@ -84,7 +84,7 @@ export default function AuthProvider({
       setAccessTokenStore(null);
       setAccessToken(null);
       setUser(null);
-      router.replace("/login"); // 👈 Uses Expo Router's replace method
+      router.replace("/login");
     }
   }, []);
 
