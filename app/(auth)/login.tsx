@@ -293,7 +293,11 @@ export default function LoginScreen() {
             <Animated.View
               style={{ transform: [{ scale: buttonScale }], marginTop: 4 }}
             >
-              <Pressable onPress={handleSubmit} disabled={isLoading}>
+              <Pressable
+                onPress={handleSubmit}
+                disabled={isLoading}
+                style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+              >
                 <LinearGradient
                   colors={
                     isLoading
