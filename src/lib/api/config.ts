@@ -7,5 +7,6 @@ export const API_CONFIG = {
   ENDPOINTS: {
     AUTH: "/auth",
     BOOKS: "/books",
+    CONVERSATIONS: "/conversations",
   },
 };
