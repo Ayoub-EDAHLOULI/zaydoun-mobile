@@ -210,19 +210,17 @@ export default function ConversationScreen() {
 
       const result = await conversationsService.talk(id, uri);
 
-      // Append user transcript + AI reply
-      appendMessages(
-        {
-          id: `u-${Date.now()}`,
-          conversationId: id,
-          role: "user",
-          content: result.userText,
-          sourcePage: null,
-          audioPath: null,
-          createdAt: new Date().toISOString(),
-        },
-        result.aiMessage,
-      );
+      // Show user transcript immediately, then AI reply
+      const userMsg: MessageData = {
+        id: `u-${Date.now()}`,
+        conversationId: id,
+        role: "user",
+        content: result.userText,
+        sourcePage: null,
+        audioPath: null,
+        createdAt: new Date().toISOString(),
+      };
+      appendMessages(userMsg, result.aiMessage);
 
       // Play AI audio response
       const audioUrl = `${API_CONFIG.BASE_URL.replace("/api/v1", "")}${result.audioUrl}`;
@@ -263,21 +261,31 @@ export default function ConversationScreen() {
     if (!content || !id || sending) return;
     setSending(true);
     setTextInput("");
+
+    // Show user bubble immediately
+    const tempUserMsg: MessageData = {
+      id: `temp-u-${Date.now()}`,
+      conversationId: id,
+      role: "user",
+      content,
+      sourcePage: null,
+      audioPath: null,
+      createdAt: new Date().toISOString(),
+    };
+    appendMessages(tempUserMsg);
+
     try {
       const result = await conversationsService.chat(id, content);
-      appendMessages(
-        {
-          id: `u-${Date.now()}`,
-          conversationId: id,
-          role: "user",
-          content: result.userText,
-          sourcePage: null,
-          audioPath: null,
-          createdAt: new Date().toISOString(),
-        },
+      // Replace temp user msg with real one, then append AI reply
+      setMessages((prev) => [
+        ...prev.filter((m) => m.id !== tempUserMsg.id),
+        { ...tempUserMsg, id: `u-${Date.now()}`, content: result.userText },
         result.aiMessage,
-      );
+      ]);
+      setTimeout(scrollToBottom, 100);
     } catch (err) {
+      // Remove the optimistic message on failure
+      setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
       Toast.show({
         type: "error",
         text1: "Failed",
