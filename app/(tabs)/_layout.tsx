@@ -1,13 +1,37 @@
 import { Tabs } from "expo-router";
 import { BookOpen, MessageCircle, User } from "lucide-react-native";
+import { Platform, View } from "react-native";
 
 const COLORS = {
   background: "#0d0d0d",
-  surface: "#1a1a1a",
+  surface: "#111111",
   primary: "#c9a84c",
-  textDisabled: "#6b6560",
-  border: "rgba(201,168,76,0.1)",
+  textDisabled: "#4a4540",
+  border: "rgba(201,168,76,0.08)",
 };
+
+function TabIcon({
+  icon,
+  focused,
+}: {
+  icon: React.ReactNode;
+  focused: boolean;
+}) {
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        justifyContent: "center",
+        width: 44,
+        height: 32,
+        borderRadius: 10,
+        backgroundColor: focused ? "rgba(201,168,76,0.1)" : "transparent",
+      }}
+    >
+      {icon}
+    </View>
+  );
+}
 
 export default function TabsLayout() {
   return (
@@ -18,16 +42,22 @@ export default function TabsLayout() {
           backgroundColor: COLORS.surface,
           borderTopColor: COLORS.border,
           borderTopWidth: 1,
-          height: 64,
-          paddingBottom: 10,
+          height: Platform.OS === "ios" ? 82 : 62,
+          paddingBottom: Platform.OS === "ios" ? 24 : 8,
           paddingTop: 8,
+          elevation: 0,
+          shadowOpacity: 0,
         },
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textDisabled,
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: "600",
-          letterSpacing: 0.3,
+          letterSpacing: 0.5,
+          marginTop: 2,
+        },
+        tabBarItemStyle: {
+          paddingTop: 2,
         },
       }}
     >
@@ -35,8 +65,17 @@ export default function TabsLayout() {
         name="library"
         options={{
           title: "Library",
-          tabBarIcon: ({ color, size }) => (
-            <BookOpen color={color} size={size} strokeWidth={1.8} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon
+              focused={focused}
+              icon={
+                <BookOpen
+                  color={color}
+                  size={20}
+                  strokeWidth={focused ? 2.2 : 1.8}
+                />
+              }
+            />
           ),
         }}
       />
@@ -44,8 +83,17 @@ export default function TabsLayout() {
         name="chat"
         options={{
           title: "Chat",
-          tabBarIcon: ({ color, size }) => (
-            <MessageCircle color={color} size={size} strokeWidth={1.8} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon
+              focused={focused}
+              icon={
+                <MessageCircle
+                  color={color}
+                  size={20}
+                  strokeWidth={focused ? 2.2 : 1.8}
+                />
+              }
+            />
           ),
         }}
       />
@@ -53,8 +101,17 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <User color={color} size={size} strokeWidth={1.8} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon
+              focused={focused}
+              icon={
+                <User
+                  color={color}
+                  size={20}
+                  strokeWidth={focused ? 2.2 : 1.8}
+                />
+              }
+            />
           ),
         }}
       />

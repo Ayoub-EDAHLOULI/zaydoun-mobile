@@ -2,6 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { BookOpen } from "lucide-react-native";
 import { useEffect, useRef } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Animated,
   Dimensions,
@@ -16,7 +17,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
 
-// 👑 Synchronized with Next.js Dashboard
 const COLORS = {
   background: "#0d0d0d", // Deepest dark
   surface: "#1a1a1a",
@@ -85,6 +85,7 @@ function Particle({ index, total }: { index: number; total: number }) {
 }
 
 export default function HomeScreen() {
+  const { isAuthenticated } = useAuth();
   const coreSpin = useRef(new Animated.Value(0)).current;
   const layer1Spin = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -263,7 +264,7 @@ export default function HomeScreen() {
         {/* Bottom CTA */}
         <View style={s.bottom}>
           <Pressable
-            onPress={() => router.push("/login")}
+            onPress={() => router.push(isAuthenticated ? "/(tabs)/library" as "/" : "/(auth)/login" as "/")}
             style={({ pressed }) => [
               { transform: [{ scale: pressed ? 0.97 : 1 }] },
             ]}
