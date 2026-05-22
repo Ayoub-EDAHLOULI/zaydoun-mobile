@@ -14,7 +14,6 @@ import {
 } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Animated,
   Modal,
   RefreshControl,
@@ -26,6 +25,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import ConfirmModal from "@/components/ConfirmModal";
 import { booksService } from "@/lib/api/services/books.service";
 import { BookSummary, BookStatus } from "@/types/books.types";
 import { uploadBookSchema } from "@/validations/books.validations";
@@ -201,6 +202,12 @@ export default function LibraryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // Delete confirm state
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+
   // Upload form state
   const [pickedFile, setPickedFile] = useState<{
     uri: string;
@@ -306,6 +313,11 @@ export default function LibraryScreen() {
       const book = await booksService.upload(pickedFile, parsed.data);
       setBooks((prev) => [book, ...prev]);
       closeModal();
+      Toast.show({
+        type: "success",
+        text1: "Book uploaded",
+        text2: `"${book.title}" added to your library`,
+      });
     } catch (err) {
       setFormErrors({
         file: err instanceof Error ? err.message : "Upload failed",
@@ -315,37 +327,65 @@ export default function LibraryScreen() {
     }
   };
 
-  const handleDelete = (id: string, title: string) => {
-    Alert.alert("Delete Book", `Remove "${title}" from your library?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await booksService.delete(id);
-            setBooks((prev) => prev.filter((b) => b.id !== id));
-          } catch {
-            Alert.alert("Error", "Could not delete the book.");
-          }
-        },
-      },
-    ]);
+  const handleDelete = (id: string, bookTitle: string) => {
+    setDeleteTarget({ id, title: bookTitle });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const { id, title: bookTitle } = deleteTarget;
+    setDeleteTarget(null);
+    try {
+      await booksService.delete(id);
+      setBooks((prev) => prev.filter((b) => b.id !== id));
+      Toast.show({
+        type: "success",
+        text1: "Book removed",
+        text2: `"${bookTitle}" deleted from your library`,
+      });
+    } catch {
+      Toast.show({
+        type: "error",
+        text1: "Delete failed",
+        text2: "Could not remove the book.",
+      });
+    }
   };
 
   const handleProcess = async (id: string) => {
     try {
       await booksService.process(id);
       setBooks((prev) =>
-        prev.map((b) => (b.id === id ? { ...b, status: "PROCESSING" } : b)),
+        prev.map((b) =>
+          b.id === id ? { ...b, status: "PROCESSING" as const } : b,
+        ),
       );
+      Toast.show({
+        type: "success",
+        text1: "Processing started",
+        text2: "Book is being re-processed",
+      });
     } catch {
-      Alert.alert("Error", "Could not restart processing.");
+      Toast.show({
+        type: "error",
+        text1: "Failed",
+        text2: "Could not restart processing.",
+      });
     }
   };
 
   return (
     <SafeAreaView style={s.safe} edges={["top", "left", "right"]}>
+      <ConfirmModal
+        visible={!!deleteTarget}
+        title="Delete Book"
+        message={`Remove "${deleteTarget?.title}" from your library? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
       {/* Header */}
       <View style={s.header}>
         <View>
