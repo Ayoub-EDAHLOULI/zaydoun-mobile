@@ -85,7 +85,14 @@ function Particle({ index, total }: { index: number; total: number }) {
 }
 
 export default function HomeScreen() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  const handleConnect = () => {
+    if (isLoading) return;
+    router.push(
+      isAuthenticated ? ("/(tabs)/library" as "/") : ("/(auth)/login" as "/"),
+    );
+  };
   const coreSpin = useRef(new Animated.Value(0)).current;
   const layer1Spin = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -264,7 +271,7 @@ export default function HomeScreen() {
         {/* Bottom CTA */}
         <View style={s.bottom}>
           <Pressable
-            onPress={() => router.push(isAuthenticated ? "/(tabs)/library" as "/" : "/(auth)/login" as "/")}
+            onPress={handleConnect}
             style={({ pressed }) => [
               { transform: [{ scale: pressed ? 0.97 : 1 }] },
             ]}

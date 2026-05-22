@@ -1,22 +1,16 @@
 import { Tabs } from "expo-router";
 import { BookOpen, MessageCircle, User } from "lucide-react-native";
-import { Platform, View } from "react-native";
+import { View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const COLORS = {
-  background: "#0d0d0d",
   surface: "#111111",
   primary: "#c9a84c",
   textDisabled: "#4a4540",
   border: "rgba(201,168,76,0.08)",
 };
 
-function TabIcon({
-  icon,
-  focused,
-}: {
-  icon: React.ReactNode;
-  focused: boolean;
-}) {
+function TabIcon({ icon, focused }: { icon: React.ReactNode; focused: boolean }) {
   return (
     <View
       style={{
@@ -34,6 +28,9 @@ function TabIcon({
 }
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = 62 + insets.bottom;
+
   return (
     <Tabs
       screenOptions={{
@@ -42,8 +39,8 @@ export default function TabsLayout() {
           backgroundColor: COLORS.surface,
           borderTopColor: COLORS.border,
           borderTopWidth: 1,
-          height: Platform.OS === "ios" ? 82 : 62,
-          paddingBottom: Platform.OS === "ios" ? 24 : 8,
+          height: tabBarHeight,
+          paddingBottom: insets.bottom,
           paddingTop: 8,
           elevation: 0,
           shadowOpacity: 0,
@@ -68,13 +65,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
               focused={focused}
-              icon={
-                <BookOpen
-                  color={color}
-                  size={20}
-                  strokeWidth={focused ? 2.2 : 1.8}
-                />
-              }
+              icon={<BookOpen color={color} size={20} strokeWidth={focused ? 2.2 : 1.8} />}
             />
           ),
         }}
@@ -86,13 +77,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
               focused={focused}
-              icon={
-                <MessageCircle
-                  color={color}
-                  size={20}
-                  strokeWidth={focused ? 2.2 : 1.8}
-                />
-              }
+              icon={<MessageCircle color={color} size={20} strokeWidth={focused ? 2.2 : 1.8} />}
             />
           ),
         }}
@@ -104,13 +89,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
               focused={focused}
-              icon={
-                <User
-                  color={color}
-                  size={20}
-                  strokeWidth={focused ? 2.2 : 1.8}
-                />
-              }
+              icon={<User color={color} size={20} strokeWidth={focused ? 2.2 : 1.8} />}
             />
           ),
         }}

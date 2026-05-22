@@ -3,7 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ChatScreen() {
   return (
-    <SafeAreaView style={s.container}>
+    <SafeAreaView style={s.container} edges={["top", "left", "right"]}>
       <View style={s.content}>
         <Text style={s.text}>Chat</Text>
       </View>
