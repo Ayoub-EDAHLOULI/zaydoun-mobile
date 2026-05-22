@@ -13,9 +13,16 @@ export const booksService = {
     return apiClient.get<BookDetail>(`${BOOKS}/${id}`);
   },
 
-  upload(file: File, data: CreateBookDto): Promise<BookSummary> {
+  upload(
+    file: { uri: string; name: string; mimeType: string },
+    data: CreateBookDto,
+  ): Promise<BookSummary> {
     const form = new FormData();
-    form.append("file", file);
+    form.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.mimeType,
+    } as unknown as Blob);
     form.append("title", data.title);
     if (data.author) form.append("author", data.author);
     if (data.language) form.append("language", data.language);
