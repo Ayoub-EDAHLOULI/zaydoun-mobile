@@ -5,10 +5,37 @@ import {
   ShieldAlert,
   User,
 } from "lucide-react-native";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
 import { VoiceProvider } from "@/contexts/VoiceContext";
+import { useVoice } from "@/contexts/VoiceContext";
+
+function VoiceDebugOverlay() {
+  const { mode, isListening, lastTranscript, error } = useVoice();
+  const modeColor = mode === "passive" ? "#555" : mode === "acknowledging" ? "#c9a84c" : "#4caf7d";
+  return (
+    <View style={{
+      position: "absolute", top: 50, left: 12, right: 12, zIndex: 9999,
+      backgroundColor: "rgba(0,0,0,0.82)", borderRadius: 10, padding: 10,
+      borderWidth: 1, borderColor: modeColor, pointerEvents: "none",
+    }}>
+      <Text style={{ color: modeColor, fontSize: 11, fontWeight: "800" }}>
+        VOICE: {mode.toUpperCase()}  {isListening ? "🎙 listening" : "🔇 idle"}
+      </Text>
+      {lastTranscript ? (
+        <Text style={{ color: "#aaa", fontSize: 10, marginTop: 3 }} numberOfLines={2}>
+          heard: "{lastTranscript}"
+        </Text>
+      ) : null}
+      {error ? (
+        <Text style={{ color: "#e05c5c", fontSize: 10, marginTop: 3 }} numberOfLines={1}>
+          err: {error}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
 
 const COLORS = {
   surface: "#111111",
@@ -48,7 +75,8 @@ export default function TabsLayout() {
 
   return (
     <VoiceProvider>
-    <Tabs
+      <VoiceDebugOverlay />
+      <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
@@ -149,5 +177,6 @@ export default function TabsLayout() {
       />
     </Tabs>
     </VoiceProvider>
+
   );
 }

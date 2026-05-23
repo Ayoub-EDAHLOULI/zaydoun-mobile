@@ -1,7 +1,7 @@
 /**
  * useZaydounVoice
  *
- * Hands-free Siri-style voice controller for Zaydoun.
+ * Siri-style wake-word controller.
  * Uses @react-native-voice/voice for STT + expo-speech for TTS.
  *
  * State machine:
@@ -17,7 +17,7 @@ import Voice, {
 } from "@react-native-voice/voice";
 import * as Speech from "expo-speech";
 import { router } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BookSummary } from "@/types/books.types";
 
 // ---------------------------------------------------------------------------
@@ -30,26 +30,20 @@ export interface ZaydounVoiceOptions {
   books: BookSummary[];
   onStartRecording?: () => void;
   onSendRecording?: () => void;
-  /** Name spoken in the greeting. Defaults to "Ayoub". */
   userName?: string;
-  /** Command window length in ms. Defaults to 7000. */
   commandWindowMs?: number;
-  /** Set false to pause the listener entirely. */
   enabled?: boolean;
 }
 
 export interface ZaydounVoiceState {
   mode: VoiceMode;
-  /** Last raw transcript received (handy for a debug overlay). */
   lastTranscript: string;
   isListening: boolean;
-  /** Last error message, if any. */
   error: string | null;
 }
 
 // ---------------------------------------------------------------------------
-// Wake-word patterns
-// Covers common STT mis-transcriptions of the Arabic name "Zaydoun".
+// Wake-word patterns — common STT mis-transcriptions of "Zaydoun"
 // ---------------------------------------------------------------------------
 
 const WAKE_PATTERNS = [
@@ -60,6 +54,8 @@ const WAKE_PATTERNS = [
   /\bthey\s?done\b/i,
   /\bsay\s?down\b/i,
   /\bzey\s?don\b/i,
+  /\bzeydun\b/i,
+  /\bzie\s?done\b/i,
 ];
 
 function containsWakeWord(text: string): boolean {
@@ -67,7 +63,7 @@ function containsWakeWord(text: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Fuzzy book title matching (normalised Levenshtein)
+// Fuzzy book title matching
 // ---------------------------------------------------------------------------
 
 function levenshtein(a: string, b: string): number {
@@ -111,10 +107,12 @@ function bestBookMatch(
 // Command regexes
 // ---------------------------------------------------------------------------
 
-const OPEN_RE = /(?:open|start\s+conversation\s+on|discuss)\s+(.+)/i;
-const RECORD_RE = /\b(?:start\s+(?:an?\s+)?audio|record(?:ing)?)\b/i;
-const SEND_RE = /\b(?:send\s+(?:the\s+)?(?:audio|message)|send\s+it)\b/i;
-const STOP_RE = /\b(?:stop|cancel|never\s*mind)\b/i;
+const OPEN_RE =
+  /(?:open|start(?:\s+conversation(?:\s+on)?)?|discuss|talk\s+about)\s+(.+)/i;
+const RECORD_RE =
+  /\b(?:start\s+(?:an?\s+)?(?:audio|recording?)|record(?:ing)?)\b/i;
+const SEND_RE = /\b(?:send(?:\s+(?:the\s+)?(?:audio|message|it))?)\b/i;
+const STOP_RE = /\b(?:stop|cancel|never\s*mind|quit|exit)\b/i;
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -124,7 +122,7 @@ export function useZaydounVoice({
   books,
   onStartRecording,
   onSendRecording,
-  userName = "Ayoub",
+  userName = "there",
   commandWindowMs = 7000,
   enabled = true,
 }: ZaydounVoiceOptions): ZaydounVoiceState {
@@ -133,15 +131,21 @@ export function useZaydounVoice({
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // All mutable values live in refs so event handlers (registered once) always
+  // read the latest value without needing to re-register.
   const modeRef = useRef<VoiceMode>("passive");
   const isListeningRef = useRef(false);
+  const isSpeakingRef = useRef(false); // true while TTS is playing — block STT results
   const commandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const booksRef = useRef(books);
   const onStartRef = useRef(onStartRecording);
   const onSendRef = useRef(onSendRecording);
   const enabledRef = useRef(enabled);
+  const userNameRef = useRef(userName);
+  const commandWindowRef = useRef(commandWindowMs);
 
+  // Keep refs in sync with props
   useEffect(() => {
     booksRef.current = books;
   }, [books]);
@@ -154,208 +158,202 @@ export function useZaydounVoice({
   useEffect(() => {
     enabledRef.current = enabled;
   }, [enabled]);
-
-  const setModeSync = useCallback((m: VoiceMode) => {
-    modeRef.current = m;
-    setMode(m);
-  }, []);
+  useEffect(() => {
+    userNameRef.current = userName;
+  }, [userName]);
+  useEffect(() => {
+    commandWindowRef.current = commandWindowMs;
+  }, [commandWindowMs]);
 
   // -------------------------------------------------------------------------
-  // STT control
+  // All logic lives inside a single effect that runs once on mount.
+  // Functions are defined inside so they close over stable refs only.
   // -------------------------------------------------------------------------
+  useEffect(() => {
+    // Guard: native module unavailable (Expo Go or missing link)
+    if (!Voice || typeof Voice.start !== "function") {
+      setError("Voice native module unavailable — use a dev build, not Expo Go");
+      return;
+    }
 
-  const startListening = useCallback(async () => {
-    if (isListeningRef.current || !enabledRef.current) return;
-    try {
-      // Destroy any stale session before starting a new one
-      await Voice.destroy().catch(() => {});
-      isListeningRef.current = true;
-      setIsListening(true);
-      setError(null);
-      await Voice.start("en-US");
-    } catch (e) {
+    // -- STT control --------------------------------------------------------
+
+    const startListening = async () => {
+      if (
+        isListeningRef.current ||
+        isSpeakingRef.current ||
+        !enabledRef.current
+      )
+        return;
+      try {
+        await Voice.destroy().catch(() => {});
+        isListeningRef.current = true;
+        setIsListening(true);
+        setError(null);
+        await Voice.start("en-US");
+      } catch (e) {
+        isListeningRef.current = false;
+        setIsListening(false);
+        setError(e instanceof Error ? e.message : "Voice start failed");
+      }
+    };
+
+    const stopListening = async () => {
+      if (!isListeningRef.current) return;
+      try {
+        await Voice.stop();
+        await Voice.destroy();
+      } catch {
+        /* already stopped */
+      }
       isListeningRef.current = false;
       setIsListening(false);
-      setError(e instanceof Error ? e.message : "Voice start failed");
-    }
-  }, []);
+    };
 
-  const stopListening = useCallback(async () => {
-    if (!isListeningRef.current) return;
-    try {
-      await Voice.stop();
-      await Voice.destroy();
-    } catch {
-      // already stopped
-    } finally {
-      isListeningRef.current = false;
-      setIsListening(false);
-    }
-  }, []);
+    // -- Timers -------------------------------------------------------------
 
-  // -------------------------------------------------------------------------
-  // Timers
-  // -------------------------------------------------------------------------
+    const clearCommandTimer = () => {
+      if (commandTimerRef.current) {
+        clearTimeout(commandTimerRef.current);
+        commandTimerRef.current = null;
+      }
+    };
 
-  const clearCommandTimer = useCallback(() => {
-    if (commandTimerRef.current) {
-      clearTimeout(commandTimerRef.current);
-      commandTimerRef.current = null;
-    }
-  }, []);
+    const clearRestartTimer = () => {
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+    };
 
-  const clearRestartTimer = useCallback(() => {
-    if (restartTimerRef.current) {
-      clearTimeout(restartTimerRef.current);
-      restartTimerRef.current = null;
-    }
-  }, []);
-
-  const scheduleRestart = useCallback(
-    (delayMs: number) => {
+    const scheduleRestart = (delayMs: number) => {
       clearRestartTimer();
       restartTimerRef.current = setTimeout(() => {
         if (
           enabledRef.current &&
           !isListeningRef.current &&
+          !isSpeakingRef.current &&
           (modeRef.current === "passive" || modeRef.current === "command")
-        )
+        ) {
           startListening();
+        }
       }, delayMs);
-    },
-    [clearRestartTimer, startListening],
-  );
+    };
 
-  // -------------------------------------------------------------------------
-  // State transitions
-  // -------------------------------------------------------------------------
+    // -- State transitions --------------------------------------------------
 
-  const returnToPassive = useCallback(async () => {
-    clearCommandTimer();
-    setModeSync("passive");
-    if (!isListeningRef.current) scheduleRestart(100);
-  }, [clearCommandTimer, setModeSync, scheduleRestart]);
+    const setModeRef = (m: VoiceMode) => {
+      modeRef.current = m;
+      setMode(m);
+    };
 
-  const openCommandWindow = useCallback(async () => {
-    setModeSync("command");
-    clearCommandTimer();
-    if (!isListeningRef.current) await startListening();
-    commandTimerRef.current = setTimeout(returnToPassive, commandWindowMs);
-  }, [
-    setModeSync,
-    clearCommandTimer,
-    startListening,
-    returnToPassive,
-    commandWindowMs,
-  ]);
+    const returnToPassive = async () => {
+      clearCommandTimer();
+      setModeRef("passive");
+      scheduleRestart(200);
+    };
 
-  // -------------------------------------------------------------------------
-  // Wake word
-  // -------------------------------------------------------------------------
+    const openCommandWindow = async () => {
+      setModeRef("command");
+      clearCommandTimer();
+      await startListening();
+      commandTimerRef.current = setTimeout(
+        returnToPassive,
+        commandWindowRef.current,
+      );
+    };
 
-  const handleWakeWord = useCallback(async () => {
-    if (modeRef.current !== "passive") return;
-    setModeSync("acknowledging");
-    clearCommandTimer();
-    await stopListening();
-    Speech.speak(`Yes, ${userName}?`, {
-      language: "en-US",
-      pitch: 1.0,
-      rate: 0.9,
-      onDone: () => {
-        void openCommandWindow();
-      },
-      onStopped: () => {
-        void openCommandWindow();
-      },
-      onError: () => {
-        void openCommandWindow();
-      },
-    });
-  }, [
-    setModeSync,
-    clearCommandTimer,
-    stopListening,
-    userName,
-    openCommandWindow,
-  ]);
+    // -- Wake word ----------------------------------------------------------
 
-  // -------------------------------------------------------------------------
-  // Command parsing
-  // -------------------------------------------------------------------------
+    const handleWakeWord = async () => {
+      if (modeRef.current !== "passive") return;
+      setModeRef("acknowledging");
+      clearCommandTimer();
+      await stopListening();
 
-  const handleCommand = useCallback(
-    async (transcript: string) => {
-      if (STOP_RE.test(transcript)) {
+      isSpeakingRef.current = true;
+      Speech.speak(`Yes, ${userNameRef.current}?`, {
+        language: "en-US",
+        pitch: 1.05,
+        rate: 0.92,
+        onDone: () => {
+          isSpeakingRef.current = false;
+          void openCommandWindow();
+        },
+        onStopped: () => {
+          isSpeakingRef.current = false;
+          void openCommandWindow();
+        },
+        onError: () => {
+          isSpeakingRef.current = false;
+          void openCommandWindow();
+        },
+      });
+    };
+
+    // -- Command parsing ----------------------------------------------------
+
+    const handleCommand = async (transcript: string) => {
+      const t = transcript.toLowerCase().trim();
+
+      if (STOP_RE.test(t)) {
         await returnToPassive();
         return;
       }
-      if (RECORD_RE.test(transcript)) {
+      if (RECORD_RE.test(t)) {
         onStartRef.current?.();
         await returnToPassive();
         return;
       }
-      if (SEND_RE.test(transcript)) {
+      if (SEND_RE.test(t)) {
         onSendRef.current?.();
         await returnToPassive();
         return;
       }
-      const m = OPEN_RE.exec(transcript);
+
+      const m = OPEN_RE.exec(t);
       if (m) {
         const book = bestBookMatch(m[1].trim(), booksRef.current);
         if (book) {
           clearCommandTimer();
           await stopListening();
-          setModeSync("passive");
-          router.push(`/conversation/index?bookId=${book.id}` as "/");
+          setModeRef("passive");
+          // /conversation is the index gateway — pushes to the right conversation
+          router.push(`/conversation?bookId=${book.id}` as "/");
           scheduleRestart(2000);
+          return;
         }
       }
-    },
-    [
-      returnToPassive,
-      clearCommandTimer,
-      stopListening,
-      setModeSync,
-      scheduleRestart,
-    ],
-  );
+      // No match — keep the command window open, let the user try again
+    };
 
-  // -------------------------------------------------------------------------
-  // Register Voice event handlers (once on mount)
-  // Handlers read current values via refs — no need to re-register on change.
-  // -------------------------------------------------------------------------
+    // -- Voice event handlers -----------------------------------------------
 
-  useEffect(() => {
     Voice.onSpeechResults = (e: SpeechResultsEvent) => {
+      if (isSpeakingRef.current) return; // ignore TTS echo
       const transcript = e.value?.[0] ?? "";
       if (!transcript) return;
       setLastTranscript(transcript);
       if (modeRef.current === "passive") {
         if (containsWakeWord(transcript)) handleWakeWord();
       } else if (modeRef.current === "command") {
-        handleCommand(transcript);
+        void handleCommand(transcript);
       }
     };
 
     Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => {
+      if (isSpeakingRef.current) return; // ignore TTS echo
       const transcript = e.value?.[0] ?? "";
       if (!transcript) return;
       setLastTranscript(transcript);
-      // Check wake word on partials for faster response
       if (modeRef.current === "passive" && containsWakeWord(transcript)) {
-        handleWakeWord();
-      }
-      // Check stop command on partials in command mode
-      if (modeRef.current === "command" && STOP_RE.test(transcript)) {
-        returnToPassive();
+        void handleWakeWord();
       }
     };
 
     Voice.onSpeechError = (e: SpeechErrorEvent) => {
       const code = e.error?.code ?? "";
       const msg = e.error?.message ?? "";
-      // Code 7 = "No match", common end-of-utterance — not a real error
       const benign =
         code === "7" || code === "recognition_fail" || msg.includes("No match");
       if (!benign) setError(msg);
@@ -365,7 +363,7 @@ export function useZaydounVoice({
         enabledRef.current &&
         (modeRef.current === "passive" || modeRef.current === "command")
       ) {
-        scheduleRestart(benign ? 300 : 600);
+        scheduleRestart(benign ? 400 : 800);
       }
     };
 
@@ -376,17 +374,18 @@ export function useZaydounVoice({
         enabledRef.current &&
         (modeRef.current === "passive" || modeRef.current === "command")
       ) {
-        scheduleRestart(150);
+        scheduleRestart(200);
       }
     };
 
     // Start immediately
-    if (enabled) startListening();
+    startListening();
 
     return () => {
       clearCommandTimer();
       clearRestartTimer();
       Speech.stop();
+      isSpeakingRef.current = false;
       Voice.onSpeechResults = () => {};
       Voice.onSpeechPartialResults = () => {};
       Voice.onSpeechError = () => {};
@@ -394,30 +393,35 @@ export function useZaydounVoice({
       Voice.destroy().catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally empty — handlers close over stable refs
+  }, []); // intentionally empty — all logic reads current values via refs
 
-  // -------------------------------------------------------------------------
   // React to enabled toggling at runtime
-  // -------------------------------------------------------------------------
-
   useEffect(() => {
+    // We can't call startListening/stopListening here since they live inside
+    // the mount effect. Signal via enabledRef and let the scheduleRestart
+    // logic pick it up, OR use Voice directly for the disable case.
     if (!enabled) {
-      clearCommandTimer();
-      clearRestartTimer();
       Speech.stop();
-      stopListening();
-      setModeSync("passive");
-    } else if (!isListeningRef.current) {
-      startListening();
+      isSpeakingRef.current = false;
+      if (commandTimerRef.current) {
+        clearTimeout(commandTimerRef.current);
+        commandTimerRef.current = null;
+      }
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = null;
+      }
+      Voice.stop().catch(() => {});
+      Voice.destroy().catch(() => {});
+      isListeningRef.current = false;
+      setIsListening(false);
+      modeRef.current = "passive";
+      setMode("passive");
     }
-  }, [
-    enabled,
-    clearCommandTimer,
-    clearRestartTimer,
-    stopListening,
-    startListening,
-    setModeSync,
-  ]);
+    // Re-enabling: the next scheduleRestart call inside the Voice handlers
+    // will restart listening automatically once enabledRef flips to true.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
 
   return { mode, lastTranscript, isListening, error };
 }
