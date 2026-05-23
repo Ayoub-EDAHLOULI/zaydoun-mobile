@@ -44,8 +44,9 @@ export interface AddMessageDto {
 
 export interface TalkResult {
   userText: string;
-  aiMessage: MessageData;
-  audioUrl: string;
+  aiMessage: MessageData | null;
+  audioUrl: string | null;
+  voiceIntent?: string | null;
 }
 
 export interface ChatResult {

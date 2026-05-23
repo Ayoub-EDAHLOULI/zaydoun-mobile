@@ -55,6 +55,6 @@ export const authService = {
   },
 
   changePassword(data: ChangePasswordDto, accessToken: string): Promise<void> {
-    return apiClient.post<void>(`${AUTH}/change-password`, data, accessToken);
+    return apiClient.patch<void>(`${AUTH}/change-password`, data, accessToken);
   },
 };

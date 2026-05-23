@@ -87,7 +87,10 @@ function levenshtein(a: string, b: string): number {
   return dp[m][n];
 }
 
-function bestBookMatch(query: string, books: BookSummary[]): BookSummary | null {
+function bestBookMatch(
+  query: string,
+  books: BookSummary[],
+): BookSummary | null {
   if (!books.length || !query.trim()) return null;
   const q = query.toLowerCase().trim();
   let best: BookSummary | null = null;
@@ -96,7 +99,10 @@ function bestBookMatch(query: string, books: BookSummary[]): BookSummary | null 
     const t = book.title.toLowerCase();
     if (t.includes(q) || q.includes(t)) return book;
     const score = levenshtein(q, t) / Math.max(q.length, t.length);
-    if (score < bestScore) { bestScore = score; best = book; }
+    if (score < bestScore) {
+      bestScore = score;
+      best = book;
+    }
   }
   return bestScore <= 0.5 ? best : null;
 }
@@ -105,10 +111,10 @@ function bestBookMatch(query: string, books: BookSummary[]): BookSummary | null 
 // Command regexes
 // ---------------------------------------------------------------------------
 
-const OPEN_RE   = /(?:open|start\s+conversation\s+on|discuss)\s+(.+)/i;
+const OPEN_RE = /(?:open|start\s+conversation\s+on|discuss)\s+(.+)/i;
 const RECORD_RE = /\b(?:start\s+(?:an?\s+)?audio|record(?:ing)?)\b/i;
-const SEND_RE   = /\b(?:send\s+(?:the\s+)?(?:audio|message)|send\s+it)\b/i;
-const STOP_RE   = /\b(?:stop|cancel|never\s*mind)\b/i;
+const SEND_RE = /\b(?:send\s+(?:the\s+)?(?:audio|message)|send\s+it)\b/i;
+const STOP_RE = /\b(?:stop|cancel|never\s*mind)\b/i;
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -122,24 +128,32 @@ export function useZaydounVoice({
   commandWindowMs = 7000,
   enabled = true,
 }: ZaydounVoiceOptions): ZaydounVoiceState {
-  const [mode, setMode]                     = useState<VoiceMode>("passive");
+  const [mode, setMode] = useState<VoiceMode>("passive");
   const [lastTranscript, setLastTranscript] = useState("");
-  const [isListening, setIsListening]       = useState(false);
-  const [error, setError]                   = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const modeRef         = useRef<VoiceMode>("passive");
-  const isListeningRef  = useRef(false);
+  const modeRef = useRef<VoiceMode>("passive");
+  const isListeningRef = useRef(false);
   const commandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const booksRef        = useRef(books);
-  const onStartRef      = useRef(onStartRecording);
-  const onSendRef       = useRef(onSendRecording);
-  const enabledRef      = useRef(enabled);
+  const booksRef = useRef(books);
+  const onStartRef = useRef(onStartRecording);
+  const onSendRef = useRef(onSendRecording);
+  const enabledRef = useRef(enabled);
 
-  useEffect(() => { booksRef.current   = books;             }, [books]);
-  useEffect(() => { onStartRef.current = onStartRecording;  }, [onStartRecording]);
-  useEffect(() => { onSendRef.current  = onSendRecording;   }, [onSendRecording]);
-  useEffect(() => { enabledRef.current = enabled;           }, [enabled]);
+  useEffect(() => {
+    booksRef.current = books;
+  }, [books]);
+  useEffect(() => {
+    onStartRef.current = onStartRecording;
+  }, [onStartRecording]);
+  useEffect(() => {
+    onSendRef.current = onSendRecording;
+  }, [onSendRecording]);
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
 
   const setModeSync = useCallback((m: VoiceMode) => {
     modeRef.current = m;
@@ -153,6 +167,8 @@ export function useZaydounVoice({
   const startListening = useCallback(async () => {
     if (isListeningRef.current || !enabledRef.current) return;
     try {
+      // Destroy any stale session before starting a new one
+      await Voice.destroy().catch(() => {});
       isListeningRef.current = true;
       setIsListening(true);
       setError(null);
@@ -182,23 +198,33 @@ export function useZaydounVoice({
   // -------------------------------------------------------------------------
 
   const clearCommandTimer = useCallback(() => {
-    if (commandTimerRef.current) { clearTimeout(commandTimerRef.current); commandTimerRef.current = null; }
+    if (commandTimerRef.current) {
+      clearTimeout(commandTimerRef.current);
+      commandTimerRef.current = null;
+    }
   }, []);
 
   const clearRestartTimer = useCallback(() => {
-    if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
   }, []);
 
-  const scheduleRestart = useCallback((delayMs: number) => {
-    clearRestartTimer();
-    restartTimerRef.current = setTimeout(() => {
-      if (
-        enabledRef.current &&
-        !isListeningRef.current &&
-        (modeRef.current === "passive" || modeRef.current === "command")
-      ) startListening();
-    }, delayMs);
-  }, [clearRestartTimer, startListening]);
+  const scheduleRestart = useCallback(
+    (delayMs: number) => {
+      clearRestartTimer();
+      restartTimerRef.current = setTimeout(() => {
+        if (
+          enabledRef.current &&
+          !isListeningRef.current &&
+          (modeRef.current === "passive" || modeRef.current === "command")
+        )
+          startListening();
+      }, delayMs);
+    },
+    [clearRestartTimer, startListening],
+  );
 
   // -------------------------------------------------------------------------
   // State transitions
@@ -215,7 +241,13 @@ export function useZaydounVoice({
     clearCommandTimer();
     if (!isListeningRef.current) await startListening();
     commandTimerRef.current = setTimeout(returnToPassive, commandWindowMs);
-  }, [setModeSync, clearCommandTimer, startListening, returnToPassive, commandWindowMs]);
+  }, [
+    setModeSync,
+    clearCommandTimer,
+    startListening,
+    returnToPassive,
+    commandWindowMs,
+  ]);
 
   // -------------------------------------------------------------------------
   // Wake word
@@ -230,32 +262,64 @@ export function useZaydounVoice({
       language: "en-US",
       pitch: 1.0,
       rate: 0.9,
-      onDone:    () => { void openCommandWindow(); },
-      onStopped: () => { void openCommandWindow(); },
-      onError:   () => { void openCommandWindow(); },
+      onDone: () => {
+        void openCommandWindow();
+      },
+      onStopped: () => {
+        void openCommandWindow();
+      },
+      onError: () => {
+        void openCommandWindow();
+      },
     });
-  }, [setModeSync, clearCommandTimer, stopListening, userName, openCommandWindow]);
+  }, [
+    setModeSync,
+    clearCommandTimer,
+    stopListening,
+    userName,
+    openCommandWindow,
+  ]);
 
   // -------------------------------------------------------------------------
   // Command parsing
   // -------------------------------------------------------------------------
 
-  const handleCommand = useCallback(async (transcript: string) => {
-    if (STOP_RE.test(transcript))   { await returnToPassive(); return; }
-    if (RECORD_RE.test(transcript)) { onStartRef.current?.(); await returnToPassive(); return; }
-    if (SEND_RE.test(transcript))   { onSendRef.current?.();  await returnToPassive(); return; }
-    const m = OPEN_RE.exec(transcript);
-    if (m) {
-      const book = bestBookMatch(m[1].trim(), booksRef.current);
-      if (book) {
-        clearCommandTimer();
-        await stopListening();
-        setModeSync("passive");
-        router.push(`/conversation/index?bookId=${book.id}` as "/");
-        scheduleRestart(2000);
+  const handleCommand = useCallback(
+    async (transcript: string) => {
+      if (STOP_RE.test(transcript)) {
+        await returnToPassive();
+        return;
       }
-    }
-  }, [returnToPassive, clearCommandTimer, stopListening, setModeSync, scheduleRestart]);
+      if (RECORD_RE.test(transcript)) {
+        onStartRef.current?.();
+        await returnToPassive();
+        return;
+      }
+      if (SEND_RE.test(transcript)) {
+        onSendRef.current?.();
+        await returnToPassive();
+        return;
+      }
+      const m = OPEN_RE.exec(transcript);
+      if (m) {
+        const book = bestBookMatch(m[1].trim(), booksRef.current);
+        if (book) {
+          clearCommandTimer();
+          await stopListening();
+          setModeSync("passive");
+          router.push(`/conversation/index?bookId=${book.id}` as "/");
+          scheduleRestart(2000);
+        }
+      }
+    },
+    [
+      returnToPassive,
+      clearCommandTimer,
+      stopListening,
+      setModeSync,
+      scheduleRestart,
+    ],
+  );
 
   // -------------------------------------------------------------------------
   // Register Voice event handlers (once on mount)
@@ -290,13 +354,17 @@ export function useZaydounVoice({
 
     Voice.onSpeechError = (e: SpeechErrorEvent) => {
       const code = e.error?.code ?? "";
-      const msg  = e.error?.message ?? "";
+      const msg = e.error?.message ?? "";
       // Code 7 = "No match", common end-of-utterance — not a real error
-      const benign = code === "7" || code === "recognition_fail" || msg.includes("No match");
+      const benign =
+        code === "7" || code === "recognition_fail" || msg.includes("No match");
       if (!benign) setError(msg);
       isListeningRef.current = false;
       setIsListening(false);
-      if (enabledRef.current && (modeRef.current === "passive" || modeRef.current === "command")) {
+      if (
+        enabledRef.current &&
+        (modeRef.current === "passive" || modeRef.current === "command")
+      ) {
         scheduleRestart(benign ? 300 : 600);
       }
     };
@@ -304,7 +372,10 @@ export function useZaydounVoice({
     Voice.onSpeechEnd = () => {
       isListeningRef.current = false;
       setIsListening(false);
-      if (enabledRef.current && (modeRef.current === "passive" || modeRef.current === "command")) {
+      if (
+        enabledRef.current &&
+        (modeRef.current === "passive" || modeRef.current === "command")
+      ) {
         scheduleRestart(150);
       }
     };
@@ -316,10 +387,10 @@ export function useZaydounVoice({
       clearCommandTimer();
       clearRestartTimer();
       Speech.stop();
-      Voice.onSpeechResults        = () => {};
+      Voice.onSpeechResults = () => {};
       Voice.onSpeechPartialResults = () => {};
-      Voice.onSpeechError          = () => {};
-      Voice.onSpeechEnd            = () => {};
+      Voice.onSpeechError = () => {};
+      Voice.onSpeechEnd = () => {};
       Voice.destroy().catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -339,7 +410,14 @@ export function useZaydounVoice({
     } else if (!isListeningRef.current) {
       startListening();
     }
-  }, [enabled, clearCommandTimer, clearRestartTimer, stopListening, startListening, setModeSync]);
+  }, [
+    enabled,
+    clearCommandTimer,
+    clearRestartTimer,
+    stopListening,
+    startListening,
+    setModeSync,
+  ]);
 
   return { mode, lastTranscript, isListening, error };
 }

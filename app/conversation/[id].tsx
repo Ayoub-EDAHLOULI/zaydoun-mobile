@@ -35,7 +35,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import { conversationsService } from "@/lib/api/services/conversations.service";
-import { API_CONFIG } from "@/lib/api/config";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ConversationDetail, MessageData } from "@/types/conversations.types";
 
@@ -459,7 +458,7 @@ export default function ConversationScreen() {
         replyLanguage.code,
       );
 
-      // Show user transcript immediately, then AI reply
+      // Always show the user's transcript
       const userMsg: MessageData = {
         id: `u-${Date.now()}`,
         conversationId: id,
@@ -469,15 +468,21 @@ export default function ConversationScreen() {
         audioPath: null,
         createdAt: new Date().toISOString(),
       };
+
+      // Voice commands (stop/repeat/etc) return no AI message or audio
+      if (result.voiceIntent || !result.aiMessage || !result.audioUrl) {
+        appendMessages(userMsg);
+        return;
+      }
+
       appendMessages(userMsg, result.aiMessage);
 
-      // Play AI audio response
-      const audioUrl = `${API_CONFIG.BASE_URL.replace("/api/v1", "")}${result.audioUrl}`;
+      // Play AI audio response (data URI — no separate HTTP request needed)
       await setAudioModeAsync({
         allowsRecording: false,
         playsInSilentMode: true,
       });
-      player.replace({ uri: audioUrl });
+      player.replace({ uri: result.audioUrl });
       player.play();
     } catch (err) {
       Toast.show({
@@ -579,11 +584,11 @@ export default function ConversationScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Messages */}
+      {/* Messages + input — pushed up by keyboard on both platforms */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={0}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
       >
         <FlatList
           ref={flatListRef}
@@ -615,6 +620,7 @@ export default function ConversationScreen() {
               multiline
               returnKeyType="send"
               onSubmitEditing={sendText}
+              autoFocus
             />
             <TouchableOpacity
               style={[
@@ -630,8 +636,8 @@ export default function ConversationScreen() {
           </View>
         )}
 
-        {/* Voice area */}
-        <View style={s.voiceArea}>
+        {/* Voice area — hidden while text input is open */}
+        {!showTextInput && <View style={s.voiceArea}>
           {isProcessing ? (
             <View style={s.processingWrap}>
               <Text style={s.processingText}>Zaydoun is thinking…</Text>
@@ -707,7 +713,7 @@ export default function ConversationScreen() {
               <Text style={s.idleHint}>with Zaydoun</Text>
             </View>
           )}
-        </View>
+        </View>}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

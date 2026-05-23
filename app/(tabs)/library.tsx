@@ -17,7 +17,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
 import {
   Animated,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -501,7 +503,10 @@ export default function LibraryScreen() {
         animationType="fade"
         onRequestClose={closeModal}
       >
-        <View style={s.overlay}>
+        <KeyboardAvoidingView
+          style={s.overlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
             onPress={closeModal}
@@ -517,118 +522,126 @@ export default function LibraryScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* File picker */}
-            <TouchableOpacity
-              style={[s.filePicker, pickedFile && s.filePickerFilled]}
-              onPress={pickFile}
-              activeOpacity={0.8}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={s.sheetScroll}
             >
-              {pickedFile ? (
-                <>
-                  <FileText
-                    color={COLORS.primary}
-                    size={20}
-                    strokeWidth={1.8}
-                  />
-                  <Text style={s.filePickerName} numberOfLines={1}>
-                    {pickedFile.name}
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Upload
-                    color={COLORS.textDisabled}
-                    size={20}
-                    strokeWidth={1.8}
-                  />
-                  <Text style={s.filePickerText}>Select PDF file</Text>
-                </>
-              )}
-            </TouchableOpacity>
-            {formErrors.file && (
-              <Text style={s.fieldError}>{formErrors.file}</Text>
-            )}
-
-            {/* Title */}
-            <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>Title</Text>
-              <TextInput
-                style={[s.input, formErrors.title && s.inputError]}
-                placeholder="Book title"
-                placeholderTextColor={COLORS.textDisabled}
-                value={title}
-                onChangeText={(v) => {
-                  setTitle(v);
-                  setFormErrors((p) => ({ ...p, title: "" }));
-                }}
-                selectionColor={COLORS.primary}
-              />
-              {formErrors.title && (
-                <Text style={s.fieldError}>{formErrors.title}</Text>
-              )}
-            </View>
-
-            {/* Author */}
-            <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>
-                Author <Text style={s.optional}>(optional)</Text>
-              </Text>
-              <TextInput
-                style={s.input}
-                placeholder="Author name"
-                placeholderTextColor={COLORS.textDisabled}
-                value={author}
-                onChangeText={setAuthor}
-                selectionColor={COLORS.primary}
-              />
-            </View>
-
-            {/* Language */}
-            <View style={s.fieldWrap}>
-              <Text style={s.fieldLabel}>Language</Text>
-              <View style={s.langRow}>
-                {LANGUAGES.map((l) => (
-                  <TouchableOpacity
-                    key={l.code}
-                    style={[s.langBtn, language === l.code && s.langBtnActive]}
-                    onPress={() => setLanguage(l.code)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={s.langFlag}>{l.flag}</Text>
-                    <Text
-                      style={[
-                        s.langLabel,
-                        language === l.code && s.langLabelActive,
-                      ]}
-                    >
-                      {l.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Submit */}
-            <TouchableOpacity
-              onPress={handleUpload}
-              disabled={uploading}
-              activeOpacity={0.8}
-              style={{ marginTop: 4 }}
-            >
-              <LinearGradient
-                colors={[COLORS.primary, COLORS.secondary]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={s.submitBtn}
+              {/* File picker */}
+              <TouchableOpacity
+                style={[s.filePicker, pickedFile && s.filePickerFilled]}
+                onPress={pickFile}
+                activeOpacity={0.8}
               >
-                {uploading && <View style={s.submitDim} />}
-                <Text style={s.submitText}>
-                  {uploading ? "Uploading…" : "Upload Book"}
+                {pickedFile ? (
+                  <>
+                    <FileText
+                      color={COLORS.primary}
+                      size={20}
+                      strokeWidth={1.8}
+                    />
+                    <Text style={s.filePickerName} numberOfLines={1}>
+                      {pickedFile.name}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Upload
+                      color={COLORS.textDisabled}
+                      size={20}
+                      strokeWidth={1.8}
+                    />
+                    <Text style={s.filePickerText}>Select PDF file</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              {formErrors.file && (
+                <Text style={s.fieldError}>{formErrors.file}</Text>
+              )}
+
+              {/* Title */}
+              <View style={[s.fieldWrap, { marginTop: 16 }]}>
+                <Text style={s.fieldLabel}>Title</Text>
+                <TextInput
+                  style={[s.input, formErrors.title && s.inputError]}
+                  placeholder="Book title"
+                  placeholderTextColor={COLORS.textDisabled}
+                  value={title}
+                  onChangeText={(v) => {
+                    setTitle(v);
+                    setFormErrors((p) => ({ ...p, title: "" }));
+                  }}
+                  selectionColor={COLORS.primary}
+                  returnKeyType="next"
+                />
+                {formErrors.title && (
+                  <Text style={s.fieldError}>{formErrors.title}</Text>
+                )}
+              </View>
+
+              {/* Author */}
+              <View style={[s.fieldWrap, { marginTop: 16 }]}>
+                <Text style={s.fieldLabel}>
+                  Author <Text style={s.optional}>(optional)</Text>
                 </Text>
-              </LinearGradient>
-            </TouchableOpacity>
+                <TextInput
+                  style={s.input}
+                  placeholder="Author name"
+                  placeholderTextColor={COLORS.textDisabled}
+                  value={author}
+                  onChangeText={setAuthor}
+                  selectionColor={COLORS.primary}
+                  returnKeyType="done"
+                />
+              </View>
+
+              {/* Language */}
+              <View style={[s.fieldWrap, { marginTop: 16 }]}>
+                <Text style={s.fieldLabel}>Language</Text>
+                <View style={s.langRow}>
+                  {LANGUAGES.map((l) => (
+                    <TouchableOpacity
+                      key={l.code}
+                      style={[s.langBtn, language === l.code && s.langBtnActive]}
+                      onPress={() => setLanguage(l.code)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={s.langFlag}>{l.flag}</Text>
+                      <Text
+                        style={[
+                          s.langLabel,
+                          language === l.code && s.langLabelActive,
+                        ]}
+                      >
+                        {l.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Submit */}
+              <TouchableOpacity
+                onPress={handleUpload}
+                disabled={uploading}
+                activeOpacity={0.8}
+                style={{ marginTop: 24 }}
+              >
+                <LinearGradient
+                  colors={[COLORS.primary, COLORS.secondary]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={s.submitBtn}
+                >
+                  {uploading && <View style={s.submitDim} />}
+                  <Text style={s.submitText}>
+                    {uploading ? "Uploading…" : "Upload Book"}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </ScrollView>
           </Animated.View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -691,7 +704,10 @@ const s = StyleSheet.create({
     paddingBottom: 40,
     borderWidth: 1,
     borderColor: COLORS.border,
-    gap: 16,
+    maxHeight: "90%",
+  },
+  sheetScroll: {
+    paddingBottom: 8,
   },
   sheetHeader: {
     flexDirection: "row",

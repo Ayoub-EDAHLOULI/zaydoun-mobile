@@ -12,6 +12,10 @@ export function setAccessTokenStore(token: string | null) {
   _accessToken = token;
 }
 
+export function getAccessToken(): string | null {
+  return _accessToken;
+}
+
 async function refreshAccessToken(): Promise<string> {
   const response = await fetch(REFRESH_URL, {
     method: "POST",

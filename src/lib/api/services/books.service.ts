@@ -1,5 +1,6 @@
 import { apiClient } from "@/lib/api/client";
 import { API_CONFIG } from "@/lib/api/config";
+import { xhrUpload } from "@/lib/api/xhrUpload";
 import { BookSummary, BookDetail, CreateBookDto } from "@/types/books.types";
 
 const BOOKS = API_CONFIG.ENDPOINTS.BOOKS;
@@ -17,16 +18,12 @@ export const booksService = {
     file: { uri: string; name: string; mimeType: string },
     data: CreateBookDto,
   ): Promise<BookSummary> {
-    const form = new FormData();
-    form.append("file", {
-      uri: file.uri,
-      name: file.name,
-      type: file.mimeType,
-    } as unknown as Blob);
-    form.append("title", data.title);
-    if (data.author) form.append("author", data.author);
-    if (data.language) form.append("language", data.language);
-    return apiClient.post<BookSummary>(BOOKS, form, undefined, true);
+    return xhrUpload<BookSummary>(BOOKS, {
+      file: { uri: file.uri, name: file.name, type: file.mimeType },
+      title: data.title,
+      author: data.author,
+      language: data.language,
+    });
   },
 
   process(id: string): Promise<void> {
