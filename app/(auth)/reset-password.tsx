@@ -1,6 +1,12 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { Eye, EyeOff, Lock, Mail } from "lucide-react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import {
+  AlertTriangle,
+  CheckCircle,
+  Eye,
+  EyeOff,
+  Lock,
+} from "lucide-react-native";
 import { useRef, useState } from "react";
 import {
   Animated,
@@ -15,7 +21,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "@/contexts/AuthContext";
+import { authService } from "@/lib/api/services/auth.service";
 import { authValidation } from "@/validations/auth.validations";
 
 const { width } = Dimensions.get("window");
@@ -25,28 +31,23 @@ const COLORS = {
   surface: "#1a1a1a",
   surfaceAlt: "#141414",
   primary: "#c9a84c",
-  primaryLight: "#e0c272",
   secondary: "#a07c30",
   text: "#f5f0e8",
   textMuted: "#c4bdb0",
   textDisabled: "#6b6560",
   error: "#e05c5c",
+  success: "#4caf7d",
   border: "rgba(201,168,76,0.15)",
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
-  emailRequired: "Email is required",
-  emailInvalid: "Enter a valid email address",
   passwordRequired: "Password is required",
   passwordMin: "Password must be at least 8 characters",
   passwordMax: "Password is too long",
   passwordWeak: "Must contain uppercase, lowercase and a number",
+  confirmRequired: "Please confirm your password",
+  confirmMismatch: "Passwords do not match",
 };
-
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
-  return <Text style={s.fieldError}>{ERROR_MESSAGES[message] ?? message}</Text>;
-}
 
 function InputField({
   icon,
@@ -56,7 +57,6 @@ function InputField({
   onBlur,
   error,
   secureTextEntry,
-  keyboardType,
   rightElement,
 }: {
   icon: React.ReactNode;
@@ -66,7 +66,6 @@ function InputField({
   onBlur?: () => void;
   error?: string;
   secureTextEntry?: boolean;
-  keyboardType?: "email-address" | "default";
   rightElement?: React.ReactNode;
 }) {
   return (
@@ -81,31 +80,33 @@ function InputField({
           onChangeText={onChangeText}
           onBlur={onBlur}
           secureTextEntry={secureTextEntry}
-          keyboardType={keyboardType}
           autoCapitalize="none"
           autoCorrect={false}
           selectionColor={COLORS.primary}
         />
         {rightElement && <View style={s.inputRight}>{rightElement}</View>}
       </View>
-      <FieldError message={error} />
+      {error && (
+        <Text style={s.fieldError}>{ERROR_MESSAGES[error] ?? error}</Text>
+      )}
     </View>
   );
 }
 
-export default function LoginScreen() {
-  const { login } = useAuth();
+export default function ResetPasswordScreen() {
+  const { token } = useLocalSearchParams<{ token: string }>();
 
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
-  const buttonScale = useRef(new Animated.Value(1)).current;
 
   const shake = () => {
     Animated.sequence([
@@ -137,31 +138,21 @@ export default function LoginScreen() {
     ]).start();
   };
 
-  const validateField = (field: string, value: string) => {
-    if (field === "email") {
-      const err = authValidation.validateEmail(value);
-      setErrors((prev) => ({ ...prev, email: err ?? "" }));
-    }
-    if (field === "password") {
-      setErrors((prev) => ({
-        ...prev,
-        password: value ? "" : "passwordRequired",
-      }));
-    }
-  };
-
-  const handleBlur = (field: string) => {
-    setTouched((prev) => ({ ...prev, [field]: true }));
-    validateField(field, field === "email" ? email : password);
+  const validateField = (field: string) => {
+    const result = authValidation.validateResetPassword({
+      password,
+      confirmPassword,
+    });
+    setErrors((prev) => ({ ...prev, [field]: result.errors[field] ?? "" }));
   };
 
   const handleSubmit = async () => {
-    setTouched({ email: true, password: true });
-    const { isValid, errors: validationErrors } = authValidation.validateLogin({
-      email,
-      password,
-    });
-
+    setTouched({ password: true, confirmPassword: true });
+    const { isValid, errors: validationErrors } =
+      authValidation.validateResetPassword({
+        password,
+        confirmPassword,
+      });
     if (!isValid) {
       setErrors(validationErrors);
       shake();
@@ -170,17 +161,90 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     setServerError(null);
-
     try {
-      await login({ email: email.trim(), password });
-      router.replace("/(tabs)/library" as "/");
+      await authService.resetPassword(token!, password);
+      setSuccess(true);
     } catch (err) {
-      setServerError(err instanceof Error ? err.message : "Login failed");
+      setServerError(
+        err instanceof Error
+          ? err.message
+          : "Reset failed. The link may have expired.",
+      );
       shake();
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Missing token
+  if (!token) {
+    return (
+      <SafeAreaView style={s.safe}>
+        <LinearGradient
+          colors={[COLORS.background, "#050505"]}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={s.centeredState}>
+          <View style={s.errorIconWrap}>
+            <AlertTriangle color={COLORS.error} size={32} strokeWidth={1.5} />
+          </View>
+          <Text style={s.stateTitle}>Invalid link</Text>
+          <Text style={s.stateBody}>
+            This reset link is missing or invalid. Request a new one.
+          </Text>
+          <TouchableOpacity
+            onPress={() => router.replace("/(auth)/forgot-password" as "/")}
+            style={s.actionBtn}
+            activeOpacity={0.75}
+          >
+            <LinearGradient
+              colors={[COLORS.primary, COLORS.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={s.actionBtnGradient}
+            >
+              <Text style={s.actionBtnText}>Request new link</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Success state
+  if (success) {
+    return (
+      <SafeAreaView style={s.safe}>
+        <LinearGradient
+          colors={[COLORS.background, "#050505"]}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={s.centeredState}>
+          <View style={s.successIconWrap}>
+            <CheckCircle color={COLORS.success} size={32} strokeWidth={1.5} />
+          </View>
+          <Text style={s.stateTitle}>Password reset!</Text>
+          <Text style={s.stateBody}>
+            Your password has been updated. Sign in with your new password.
+          </Text>
+          <TouchableOpacity
+            onPress={() => router.replace("/(auth)/login" as "/")}
+            style={s.actionBtn}
+            activeOpacity={0.75}
+          >
+            <LinearGradient
+              colors={[COLORS.primary, COLORS.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={s.actionBtnGradient}
+            >
+              <Text style={s.actionBtnText}>Sign In</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={s.safe}>
@@ -216,8 +280,10 @@ export default function LoginScreen() {
                 </View>
               </LinearGradient>
             </View>
-            <Text style={s.title}>Welcome back</Text>
-            <Text style={s.subtitle}>Sign in to your reading companion</Text>
+            <Text style={s.title}>New password</Text>
+            <Text style={s.subtitle}>
+              Choose a strong password for your account
+            </Text>
           </View>
 
           <Animated.View
@@ -231,30 +297,18 @@ export default function LoginScreen() {
 
             <InputField
               icon={
-                <Mail color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
-              }
-              placeholder="Email address"
-              value={email}
-              onChangeText={(v) => {
-                setEmail(v);
-                if (touched.email) validateField("email", v);
-              }}
-              onBlur={() => handleBlur("email")}
-              error={touched.email ? errors.email : undefined}
-              keyboardType="email-address"
-            />
-
-            <InputField
-              icon={
                 <Lock color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
               }
-              placeholder="Password"
+              placeholder="New password"
               value={password}
               onChangeText={(v) => {
                 setPassword(v);
-                if (touched.password) validateField("password", v);
+                if (touched.password) validateField("password");
               }}
-              onBlur={() => handleBlur("password")}
+              onBlur={() => {
+                setTouched((p) => ({ ...p, password: true }));
+                validateField("password");
+              }}
               error={touched.password ? errors.password : undefined}
               secureTextEntry={!showPassword}
               rightElement={
@@ -279,13 +333,47 @@ export default function LoginScreen() {
               }
             />
 
-            <Animated.View
-              style={{
-                transform: [{ scale: buttonScale }],
-                marginTop: 4,
-                alignItems: "center",
+            <InputField
+              icon={
+                <Lock color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
+              }
+              placeholder="Confirm new password"
+              value={confirmPassword}
+              onChangeText={(v) => {
+                setConfirmPassword(v);
+                if (touched.confirmPassword) validateField("confirmPassword");
               }}
-            >
+              onBlur={() => {
+                setTouched((p) => ({ ...p, confirmPassword: true }));
+                validateField("confirmPassword");
+              }}
+              error={
+                touched.confirmPassword ? errors.confirmPassword : undefined
+              }
+              secureTextEntry={!showConfirm}
+              rightElement={
+                <TouchableOpacity
+                  onPress={() => setShowConfirm((p) => !p)}
+                  hitSlop={8}
+                >
+                  {showConfirm ? (
+                    <EyeOff
+                      color={COLORS.textDisabled}
+                      size={18}
+                      strokeWidth={1.5}
+                    />
+                  ) : (
+                    <Eye
+                      color={COLORS.textDisabled}
+                      size={18}
+                      strokeWidth={1.5}
+                    />
+                  )}
+                </TouchableOpacity>
+              }
+            />
+
+            <View style={{ marginTop: 4, alignItems: "center" }}>
               <TouchableOpacity
                 onPress={handleSubmit}
                 disabled={isLoading}
@@ -300,23 +388,12 @@ export default function LoginScreen() {
                 >
                   {isLoading && <View style={s.submitDim} />}
                   <Text style={s.submitText}>
-                    {isLoading ? "Signing in…" : "Sign In"}
+                    {isLoading ? "Resetting…" : "Reset Password"}
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>
-            </Animated.View>
+            </View>
           </Animated.View>
-
-          <TouchableOpacity onPress={() => router.push("/(auth)/register" as "/")} style={s.footerLink}>
-            <Text style={s.footerText}>
-              Don't have an account?{" "}
-              <Text style={s.footerAccent}>Create one</Text>
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => router.push("/(auth)/forgot-password" as "/")} style={s.footerLink}>
-            <Text style={s.footerMuted}>Forgot your password?</Text>
-          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -360,6 +437,7 @@ const s = StyleSheet.create({
     color: COLORS.textDisabled,
     fontSize: 14,
     fontWeight: "500",
+    textAlign: "center",
   },
   card: {
     backgroundColor: COLORS.surface,
@@ -400,12 +478,7 @@ const s = StyleSheet.create({
   },
   inputRowError: { borderColor: "rgba(224,92,92,0.45)" },
   inputIcon: { marginRight: 10 },
-  input: {
-    flex: 1,
-    color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "500",
-  },
+  input: { flex: 1, color: COLORS.text, fontSize: 15, fontWeight: "500" },
   inputRight: { marginLeft: 8, padding: 4 },
   fieldError: {
     color: COLORS.error,
@@ -413,13 +486,9 @@ const s = StyleSheet.create({
     fontWeight: "500",
     marginLeft: 4,
   },
-  submitBtn: {
+  submitBtnWrapper: {
     width: width - 96,
-    alignSelf: "center",
-    paddingVertical: 17,
     borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
@@ -431,28 +500,63 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.35)",
     borderRadius: 14,
   },
+  submitBtnGradient: {
+    paddingVertical: 17,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
   submitText: {
     color: "#0d0d0d",
     fontSize: 16,
     fontWeight: "800",
     letterSpacing: 0.3,
   },
-  footerText: {
+  centeredState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  errorIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(224,92,92,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(224,92,92,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  successIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(76,175,125,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(76,175,125,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  stateTitle: {
+    color: COLORS.text,
+    fontSize: 22,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  stateBody: {
     color: COLORS.textDisabled,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "500",
     textAlign: "center",
-    marginTop: 28,
     lineHeight: 22,
   },
-  footerAccent: { color: COLORS.textMuted, fontWeight: "600" },
-  footerLink: { alignItems: "center", marginTop: 16 },
-  footerMuted: {
-    color: COLORS.textDisabled,
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  submitBtnWrapper: {
+  actionBtn: {
+    marginTop: 12,
     width: width - 96,
     borderRadius: 14,
     shadowColor: COLORS.primary,
@@ -461,11 +565,16 @@ const s = StyleSheet.create({
     shadowRadius: 12,
     elevation: 6,
   },
-  submitBtnGradient: {
+  actionBtnGradient: {
     paddingVertical: 17,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    overflow: "hidden",
+  },
+  actionBtnText: {
+    color: "#0d0d0d",
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: 0.3,
   },
 });

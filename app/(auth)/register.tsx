@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { Eye, EyeOff, Lock, Mail } from "lucide-react-native";
+import { Eye, EyeOff, Lock, Mail, User } from "lucide-react-native";
 import { useRef, useState } from "react";
 import {
   Animated,
@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
+import { authService } from "@/lib/api/services/auth.service";
 import { authValidation } from "@/validations/auth.validations";
 
 const { width } = Dimensions.get("window");
@@ -35,12 +36,16 @@ const COLORS = {
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
+  nameRequired: "Name is required",
+  nameMin: "Name must be at least 2 characters",
   emailRequired: "Email is required",
   emailInvalid: "Enter a valid email address",
   passwordRequired: "Password is required",
   passwordMin: "Password must be at least 8 characters",
   passwordMax: "Password is too long",
   passwordWeak: "Must contain uppercase, lowercase and a number",
+  confirmRequired: "Please confirm your password",
+  confirmMismatch: "Passwords do not match",
 };
 
 function FieldError({ message }: { message?: string }) {
@@ -93,19 +98,21 @@ function InputField({
   );
 }
 
-export default function LoginScreen() {
+export default function RegisterScreen() {
   const { login } = useAuth();
 
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
-  const buttonScale = useRef(new Animated.Value(1)).current;
 
   const shake = () => {
     Animated.sequence([
@@ -137,30 +144,35 @@ export default function LoginScreen() {
     ]).start();
   };
 
-  const validateField = (field: string, value: string) => {
-    if (field === "email") {
-      const err = authValidation.validateEmail(value);
-      setErrors((prev) => ({ ...prev, email: err ?? "" }));
-    }
-    if (field === "password") {
-      setErrors((prev) => ({
-        ...prev,
-        password: value ? "" : "passwordRequired",
-      }));
-    }
+  const validateField = (field: string) => {
+    const result = authValidation.validateRegister({
+      name,
+      email,
+      password,
+      confirmPassword,
+    });
+    setErrors((prev) => ({ ...prev, [field]: result.errors[field] ?? "" }));
   };
 
   const handleBlur = (field: string) => {
     setTouched((prev) => ({ ...prev, [field]: true }));
-    validateField(field, field === "email" ? email : password);
+    validateField(field);
   };
 
   const handleSubmit = async () => {
-    setTouched({ email: true, password: true });
-    const { isValid, errors: validationErrors } = authValidation.validateLogin({
-      email,
-      password,
+    setTouched({
+      name: true,
+      email: true,
+      password: true,
+      confirmPassword: true,
     });
+    const { isValid, errors: validationErrors } =
+      authValidation.validateRegister({
+        name,
+        email,
+        password,
+        confirmPassword,
+      });
 
     if (!isValid) {
       setErrors(validationErrors);
@@ -172,10 +184,17 @@ export default function LoginScreen() {
     setServerError(null);
 
     try {
+      await authService.register({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+      });
       await login({ email: email.trim(), password });
       router.replace("/(tabs)/library" as "/");
     } catch (err) {
-      setServerError(err instanceof Error ? err.message : "Login failed");
+      setServerError(
+        err instanceof Error ? err.message : "Registration failed",
+      );
       shake();
     } finally {
       setIsLoading(false);
@@ -216,8 +235,8 @@ export default function LoginScreen() {
                 </View>
               </LinearGradient>
             </View>
-            <Text style={s.title}>Welcome back</Text>
-            <Text style={s.subtitle}>Sign in to your reading companion</Text>
+            <Text style={s.title}>Create account</Text>
+            <Text style={s.subtitle}>Start your reading journey</Text>
           </View>
 
           <Animated.View
@@ -231,13 +250,27 @@ export default function LoginScreen() {
 
             <InputField
               icon={
+                <User color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
+              }
+              placeholder="Full name"
+              value={name}
+              onChangeText={(v) => {
+                setName(v);
+                if (touched.name) validateField("name");
+              }}
+              onBlur={() => handleBlur("name")}
+              error={touched.name ? errors.name : undefined}
+            />
+
+            <InputField
+              icon={
                 <Mail color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
               }
               placeholder="Email address"
               value={email}
               onChangeText={(v) => {
                 setEmail(v);
-                if (touched.email) validateField("email", v);
+                if (touched.email) validateField("email");
               }}
               onBlur={() => handleBlur("email")}
               error={touched.email ? errors.email : undefined}
@@ -252,7 +285,7 @@ export default function LoginScreen() {
               value={password}
               onChangeText={(v) => {
                 setPassword(v);
-                if (touched.password) validateField("password", v);
+                if (touched.password) validateField("password");
               }}
               onBlur={() => handleBlur("password")}
               error={touched.password ? errors.password : undefined}
@@ -279,13 +312,44 @@ export default function LoginScreen() {
               }
             />
 
-            <Animated.View
-              style={{
-                transform: [{ scale: buttonScale }],
-                marginTop: 4,
-                alignItems: "center",
+            <InputField
+              icon={
+                <Lock color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
+              }
+              placeholder="Confirm password"
+              value={confirmPassword}
+              onChangeText={(v) => {
+                setConfirmPassword(v);
+                if (touched.confirmPassword) validateField("confirmPassword");
               }}
-            >
+              onBlur={() => handleBlur("confirmPassword")}
+              error={
+                touched.confirmPassword ? errors.confirmPassword : undefined
+              }
+              secureTextEntry={!showConfirm}
+              rightElement={
+                <TouchableOpacity
+                  onPress={() => setShowConfirm((p) => !p)}
+                  hitSlop={8}
+                >
+                  {showConfirm ? (
+                    <EyeOff
+                      color={COLORS.textDisabled}
+                      size={18}
+                      strokeWidth={1.5}
+                    />
+                  ) : (
+                    <Eye
+                      color={COLORS.textDisabled}
+                      size={18}
+                      strokeWidth={1.5}
+                    />
+                  )}
+                </TouchableOpacity>
+              }
+            />
+
+            <Animated.View style={{ marginTop: 4, alignItems: "center" }}>
               <TouchableOpacity
                 onPress={handleSubmit}
                 disabled={isLoading}
@@ -300,22 +364,18 @@ export default function LoginScreen() {
                 >
                   {isLoading && <View style={s.submitDim} />}
                   <Text style={s.submitText}>
-                    {isLoading ? "Signing in…" : "Sign In"}
+                    {isLoading ? "Creating account…" : "Create Account"}
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>
             </Animated.View>
           </Animated.View>
 
-          <TouchableOpacity onPress={() => router.push("/(auth)/register" as "/")} style={s.footerLink}>
+          <TouchableOpacity onPress={() => router.back()} style={s.footerLink}>
             <Text style={s.footerText}>
-              Don't have an account?{" "}
-              <Text style={s.footerAccent}>Create one</Text>
+              Already have an account?{" "}
+              <Text style={s.footerAccent}>Sign in</Text>
             </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => router.push("/(auth)/forgot-password" as "/")} style={s.footerLink}>
-            <Text style={s.footerMuted}>Forgot your password?</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -356,11 +416,7 @@ const s = StyleSheet.create({
     letterSpacing: 0.3,
     marginTop: 4,
   },
-  subtitle: {
-    color: COLORS.textDisabled,
-    fontSize: 14,
-    fontWeight: "500",
-  },
+  subtitle: { color: COLORS.textDisabled, fontSize: 14, fontWeight: "500" },
   card: {
     backgroundColor: COLORS.surface,
     borderRadius: 24,
@@ -400,12 +456,7 @@ const s = StyleSheet.create({
   },
   inputRowError: { borderColor: "rgba(224,92,92,0.45)" },
   inputIcon: { marginRight: 10 },
-  input: {
-    flex: 1,
-    color: COLORS.text,
-    fontSize: 15,
-    fontWeight: "500",
-  },
+  input: { flex: 1, color: COLORS.text, fontSize: 15, fontWeight: "500" },
   inputRight: { marginLeft: 8, padding: 4 },
   fieldError: {
     color: COLORS.error,
@@ -413,13 +464,9 @@ const s = StyleSheet.create({
     fontWeight: "500",
     marginLeft: 4,
   },
-  submitBtn: {
+  submitBtnWrapper: {
     width: width - 96,
-    alignSelf: "center",
-    paddingVertical: 17,
     borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
@@ -431,36 +478,6 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.35)",
     borderRadius: 14,
   },
-  submitText: {
-    color: "#0d0d0d",
-    fontSize: 16,
-    fontWeight: "800",
-    letterSpacing: 0.3,
-  },
-  footerText: {
-    color: COLORS.textDisabled,
-    fontSize: 13,
-    fontWeight: "500",
-    textAlign: "center",
-    marginTop: 28,
-    lineHeight: 22,
-  },
-  footerAccent: { color: COLORS.textMuted, fontWeight: "600" },
-  footerLink: { alignItems: "center", marginTop: 16 },
-  footerMuted: {
-    color: COLORS.textDisabled,
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  submitBtnWrapper: {
-    width: width - 96,
-    borderRadius: 14,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
-  },
   submitBtnGradient: {
     paddingVertical: 17,
     borderRadius: 14,
@@ -468,4 +485,18 @@ const s = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
+  submitText: {
+    color: "#0d0d0d",
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+  footerLink: { alignItems: "center", marginTop: 24 },
+  footerText: {
+    color: COLORS.textDisabled,
+    fontSize: 13,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  footerAccent: { color: COLORS.textMuted, fontWeight: "600" },
 });

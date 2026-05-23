@@ -2,6 +2,7 @@ import { apiClient } from "@/lib/api/client";
 import { API_CONFIG } from "@/lib/api/config";
 import {
   LoginDto,
+  RegisterDto,
   ChangePasswordDto,
   UpdateProfileDto,
   AuthResponse,
@@ -14,6 +15,21 @@ const BASE_URL = API_CONFIG.BASE_URL;
 export const authService = {
   login(data: LoginDto): Promise<AuthResponse> {
     return apiClient.post<AuthResponse>(`${AUTH}/login`, data);
+  },
+
+  register(data: RegisterDto): Promise<AuthResponse> {
+    return apiClient.post<AuthResponse>(`${AUTH}/register`, data);
+  },
+
+  forgotPassword(email: string): Promise<void> {
+    return apiClient.post<void>(`${AUTH}/forgot-password`, { email });
+  },
+
+  resetPassword(token: string, newPassword: string): Promise<void> {
+    return apiClient.post<void>(`${AUTH}/reset-password`, {
+      token,
+      newPassword,
+    });
   },
 
   async refreshToken(): Promise<{ accessToken: string }> {
