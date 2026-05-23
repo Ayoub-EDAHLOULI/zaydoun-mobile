@@ -8,6 +8,7 @@ import {
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
+import { VoiceProvider } from "@/contexts/VoiceContext";
 
 const COLORS = {
   surface: "#111111",
@@ -46,6 +47,7 @@ export default function TabsLayout() {
   const tabBarHeight = 62 + insets.bottom;
 
   return (
+    <VoiceProvider>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -146,5 +148,6 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+    </VoiceProvider>
   );
 }
