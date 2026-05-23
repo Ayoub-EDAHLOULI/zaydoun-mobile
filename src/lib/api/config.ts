@@ -8,5 +8,6 @@ export const API_CONFIG = {
     AUTH: "/auth",
     BOOKS: "/books",
     CONVERSATIONS: "/conversations",
+    USERS: "/users",
   },
 };

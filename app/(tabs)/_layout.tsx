@@ -1,7 +1,13 @@
 import { Tabs } from "expo-router";
-import { BookOpen, MessageCircle, User } from "lucide-react-native";
+import {
+  BookOpen,
+  MessageCircle,
+  ShieldAlert,
+  User,
+} from "lucide-react-native";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "@/contexts/AuthContext";
 
 const COLORS = {
   surface: "#111111",
@@ -10,7 +16,13 @@ const COLORS = {
   border: "rgba(201,168,76,0.08)",
 };
 
-function TabIcon({ icon, focused }: { icon: React.ReactNode; focused: boolean }) {
+function TabIcon({
+  icon,
+  focused,
+}: {
+  icon: React.ReactNode;
+  focused: boolean;
+}) {
   return (
     <View
       style={{
@@ -29,6 +41,8 @@ function TabIcon({ icon, focused }: { icon: React.ReactNode; focused: boolean })
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const tabBarHeight = 62 + insets.bottom;
 
   return (
@@ -65,7 +79,13 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
               focused={focused}
-              icon={<BookOpen color={color} size={20} strokeWidth={focused ? 2.2 : 1.8} />}
+              icon={
+                <BookOpen
+                  color={color}
+                  size={20}
+                  strokeWidth={focused ? 2.2 : 1.8}
+                />
+              }
             />
           ),
         }}
@@ -77,7 +97,13 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
               focused={focused}
-              icon={<MessageCircle color={color} size={20} strokeWidth={focused ? 2.2 : 1.8} />}
+              icon={
+                <MessageCircle
+                  color={color}
+                  size={20}
+                  strokeWidth={focused ? 2.2 : 1.8}
+                />
+              }
             />
           ),
         }}
@@ -89,7 +115,32 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, focused }) => (
             <TabIcon
               focused={focused}
-              icon={<User color={color} size={20} strokeWidth={focused ? 2.2 : 1.8} />}
+              icon={
+                <User
+                  color={color}
+                  size={20}
+                  strokeWidth={focused ? 2.2 : 1.8}
+                />
+              }
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: "Admin",
+          href: isAdmin ? undefined : null,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon
+              focused={focused}
+              icon={
+                <ShieldAlert
+                  color={color}
+                  size={20}
+                  strokeWidth={focused ? 2.2 : 1.8}
+                />
+              }
             />
           ),
         }}
