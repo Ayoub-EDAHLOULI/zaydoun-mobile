@@ -1,4 +1,11 @@
-import { Audio } from "expo-av";
+import {
+  useAudioRecorder,
+  useAudioPlayer,
+  useAudioPlayerStatus,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from "expo-audio";
 import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, router } from "expo-router";
@@ -339,10 +346,12 @@ export default function ConversationScreen() {
   const [textInput, setTextInput] = useState("");
   const [sending, setSending] = useState(false);
 
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const player = useAudioPlayer(null);
+  const playerStatus = useAudioPlayerStatus(player);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const volumeAnim = useRef(new Animated.Value(0)).current;
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const isPlayingAudio = playerStatus.playing;
   const flatListRef = useRef<FlatList>(null);
 
   // Load conversation
@@ -402,43 +411,46 @@ export default function ConversationScreen() {
   // ── VOICE ──────────────────────────────────────────────
   const startRecording = async () => {
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
+      const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
         Toast.show({ type: "error", text1: "Microphone permission denied" });
         return;
       }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
-      const { recording } = await Audio.Recording.createAsync(
-        { ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true },
-        (status) => {
-          if (status.isRecording && status.metering != null) {
-            Animated.timing(volumeAnim, {
-              toValue: dbToLevel(status.metering),
-              duration: 80,
-              easing: Easing.out(Easing.ease),
-              useNativeDriver: true,
-            }).start();
-          }
-        },
-        80,
-      );
-      recordingRef.current = recording;
+      await recorder.prepareToRecordAsync();
+      recorder.record();
       setRecordingState("recording");
+
+      // Poll metering every 80 ms while recording
+      const meteringInterval = setInterval(() => {
+        const status = recorder.getStatus();
+        if (!status.isRecording) {
+          clearInterval(meteringInterval);
+          return;
+        }
+        if (status.metering != null) {
+          Animated.timing(volumeAnim, {
+            toValue: dbToLevel(status.metering),
+            duration: 80,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }).start();
+        }
+      }, 80);
     } catch {
       Toast.show({ type: "error", text1: "Could not start recording" });
     }
   };
 
   const stopAndSend = async () => {
-    if (!recordingRef.current || !id) return;
+    if (!recorder.isRecording || !id) return;
     setRecordingState("processing");
     try {
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
+      await recorder.stop();
+      const uri = recorder.uri;
       if (!uri) throw new Error("No audio URI");
 
       const result = await conversationsService.talk(
@@ -461,19 +473,12 @@ export default function ConversationScreen() {
 
       // Play AI audio response
       const audioUrl = `${API_CONFIG.BASE_URL.replace("/api/v1", "")}${result.audioUrl}`;
-      const { sound } = await Audio.Sound.createAsync({ uri: audioUrl });
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
       });
-      setIsPlayingAudio(true);
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setIsPlayingAudio(false);
-          sound.unloadAsync();
-        }
-      });
+      player.replace({ uri: audioUrl });
+      player.play();
     } catch (err) {
       Toast.show({
         type: "error",
@@ -486,13 +491,12 @@ export default function ConversationScreen() {
   };
 
   const cancelRecording = async () => {
-    if (!recordingRef.current) return;
+    if (!recorder.isRecording) return;
     try {
-      await recordingRef.current.stopAndUnloadAsync();
+      await recorder.stop();
     } catch {
       /* ignore */
     }
-    recordingRef.current = null;
     setRecordingState("idle");
   };
 
@@ -647,7 +651,11 @@ export default function ConversationScreen() {
               <View style={s.micWithBars}>
                 <VoiceBars volumeAnim={volumeAnim} />
                 <Animated.View
-                  style={[s.micOuter, s.micOuterRecording, { transform: [{ scale: pulseAnim }] }]}
+                  style={[
+                    s.micOuter,
+                    s.micOuterRecording,
+                    { transform: [{ scale: pulseAnim }] },
+                  ]}
                 >
                   <TouchableOpacity
                     style={s.micInner}

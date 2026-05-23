@@ -28,7 +28,9 @@
       "predictiveBackGestureEnabled": false,
       "navigationBarColor": "#0d0d0d",
       "navigationBarStyle": "dark",
-      "permissions": ["android.permission.RECORD_AUDIO"]
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -49,7 +51,8 @@
       "expo-font",
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
