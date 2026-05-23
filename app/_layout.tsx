@@ -1,5 +1,6 @@
 import AuthProvider from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { VoiceProvider } from "@/contexts/VoiceContext";
 import { setBackgroundColorAsync } from "expo-system-ui";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -48,15 +49,17 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <LanguageProvider>
         <AuthProvider>
-          <StatusBar style="light" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: "#0d0d0d" },
-              animation: "fade",
-            }}
-          />
-          <Toast config={toastConfig} topOffset={60} />
+          <VoiceProvider>
+            <StatusBar style="light" />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: "#0d0d0d" },
+                animation: "fade",
+              }}
+            />
+            <Toast config={toastConfig} topOffset={60} />
+          </VoiceProvider>
         </AuthProvider>
       </LanguageProvider>
     </SafeAreaProvider>
