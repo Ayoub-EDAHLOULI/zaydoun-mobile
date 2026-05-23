@@ -109,7 +109,6 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     lastTranscript: "",
     isListening: false,
     error: null,
-    hasPermission: false,
   });
 
   // Pause voice when app goes to background; resume when foregrounded

@@ -2,50 +2,23 @@
  * useZaydounVoice
  *
  * Hands-free Siri-style voice controller for Zaydoun.
- * Uses expo-speech-recognition (SDK 54) + expo-speech for TTS.
+ * Uses @react-native-voice/voice for STT + expo-speech for TTS.
  *
  * State machine:
  *   passive  ──(wake word)──▶  acknowledging  ──(TTS done)──▶  command
  *   command  ──(action | stop | timeout)──▶  passive
  *
  * Requires a development build — does NOT run in Expo Go.
- * Build: npx expo run:android  /  npx expo run:ios
  */
 
+import Voice, {
+  SpeechResultsEvent,
+  SpeechErrorEvent,
+} from "@react-native-voice/voice";
 import * as Speech from "expo-speech";
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BookSummary } from "@/types/books.types";
-
-// ---------------------------------------------------------------------------
-// Lazy native module load
-//
-// expo-speech-recognition calls requireNativeModule() at the top of its own
-// index.js, which throws synchronously in Expo Go before any try/catch in
-// application code can catch it. We must avoid triggering that module
-// evaluation at all when the native side isn't present.
-//
-// Solution: dynamic require() inside a try/catch so Metro only evaluates the
-// package when we explicitly ask — and we catch the throw here rather than
-// letting it propagate up through the layout tree.
-// ---------------------------------------------------------------------------
-
-type SpeechRecognitionModule =
-  typeof import("expo-speech-recognition").ExpoSpeechRecognitionModule;
-type ResultEvent =
-  import("expo-speech-recognition").ExpoSpeechRecognitionResultEvent;
-type ErrorEvent =
-  import("expo-speech-recognition").ExpoSpeechRecognitionErrorEvent;
-
-let STT: SpeechRecognitionModule | null = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const pkg = require("expo-speech-recognition") as typeof import("expo-speech-recognition");
-  STT = pkg.ExpoSpeechRecognitionModule ?? null;
-} catch {
-  // Native module not registered — running in Expo Go.
-  // Voice features are silently disabled; the app continues normally.
-}
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -70,10 +43,8 @@ export interface ZaydounVoiceState {
   /** Last raw transcript received (handy for a debug overlay). */
   lastTranscript: string;
   isListening: boolean;
-  /** Last error message, if any. Clears on the next successful start. */
+  /** Last error message, if any. */
   error: string | null;
-  /** True after the user granted mic + speech-recognition permissions. */
-  hasPermission: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -155,22 +126,20 @@ export function useZaydounVoice({
   const [lastTranscript, setLastTranscript] = useState("");
   const [isListening, setIsListening]       = useState(false);
   const [error, setError]                   = useState<string | null>(null);
-  const [hasPermission, setHasPermission]   = useState(false);
 
-  const modeRef          = useRef<VoiceMode>("passive");
-  const isListeningRef   = useRef(false);
-  const commandTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const restartTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const booksRef         = useRef(books);
-  const onStartRef       = useRef(onStartRecording);
-  const onSendRef        = useRef(onSendRecording);
-  const enabledRef       = useRef(enabled);
-  const hasPermissionRef = useRef(false);
+  const modeRef         = useRef<VoiceMode>("passive");
+  const isListeningRef  = useRef(false);
+  const commandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const booksRef        = useRef(books);
+  const onStartRef      = useRef(onStartRecording);
+  const onSendRef       = useRef(onSendRecording);
+  const enabledRef      = useRef(enabled);
 
-  useEffect(() => { booksRef.current  = books;             }, [books]);
-  useEffect(() => { onStartRef.current = onStartRecording; }, [onStartRecording]);
-  useEffect(() => { onSendRef.current  = onSendRecording;  }, [onSendRecording]);
-  useEffect(() => { enabledRef.current = enabled;          }, [enabled]);
+  useEffect(() => { booksRef.current   = books;             }, [books]);
+  useEffect(() => { onStartRef.current = onStartRecording;  }, [onStartRecording]);
+  useEffect(() => { onSendRef.current  = onSendRecording;   }, [onSendRecording]);
+  useEffect(() => { enabledRef.current = enabled;           }, [enabled]);
 
   const setModeSync = useCallback((m: VoiceMode) => {
     modeRef.current = m;
@@ -178,39 +147,34 @@ export function useZaydounVoice({
   }, []);
 
   // -------------------------------------------------------------------------
-  // Permission
-  // -------------------------------------------------------------------------
-
-  useEffect(() => {
-    if (!STT) return;
-    STT.requestPermissionsAsync().then((res) => {
-      hasPermissionRef.current = res.granted;
-      setHasPermission(res.granted);
-    });
-  }, []);
-
-  // -------------------------------------------------------------------------
   // STT control
   // -------------------------------------------------------------------------
 
-  const startListening = useCallback(() => {
-    if (!STT || isListeningRef.current || !enabledRef.current || !hasPermissionRef.current) return;
-    isListeningRef.current = true;
-    setIsListening(true);
-    setError(null);
-    STT.start({
-      lang: "en-US",
-      interimResults: true,
-      continuous: true,
-      contextualStrings: ["Zaydoun", "Zaidoun", "Zaydon", "open", "record", "send", "stop"],
-    });
+  const startListening = useCallback(async () => {
+    if (isListeningRef.current || !enabledRef.current) return;
+    try {
+      isListeningRef.current = true;
+      setIsListening(true);
+      setError(null);
+      await Voice.start("en-US");
+    } catch (e) {
+      isListeningRef.current = false;
+      setIsListening(false);
+      setError(e instanceof Error ? e.message : "Voice start failed");
+    }
   }, []);
 
-  const stopListening = useCallback(() => {
-    if (!STT || !isListeningRef.current) return;
-    isListeningRef.current = false;
-    setIsListening(false);
-    STT.abort();
+  const stopListening = useCallback(async () => {
+    if (!isListeningRef.current) return;
+    try {
+      await Voice.stop();
+      await Voice.destroy();
+    } catch {
+      // already stopped
+    } finally {
+      isListeningRef.current = false;
+      setIsListening(false);
+    }
   }, []);
 
   // -------------------------------------------------------------------------
@@ -230,7 +194,6 @@ export function useZaydounVoice({
     restartTimerRef.current = setTimeout(() => {
       if (
         enabledRef.current &&
-        hasPermissionRef.current &&
         !isListeningRef.current &&
         (modeRef.current === "passive" || modeRef.current === "command")
       ) startListening();
@@ -241,16 +204,16 @@ export function useZaydounVoice({
   // State transitions
   // -------------------------------------------------------------------------
 
-  const returnToPassive = useCallback(() => {
+  const returnToPassive = useCallback(async () => {
     clearCommandTimer();
     setModeSync("passive");
     if (!isListeningRef.current) scheduleRestart(100);
   }, [clearCommandTimer, setModeSync, scheduleRestart]);
 
-  const openCommandWindow = useCallback(() => {
+  const openCommandWindow = useCallback(async () => {
     setModeSync("command");
     clearCommandTimer();
-    if (!isListeningRef.current) startListening();
+    if (!isListeningRef.current) await startListening();
     commandTimerRef.current = setTimeout(returnToPassive, commandWindowMs);
   }, [setModeSync, clearCommandTimer, startListening, returnToPassive, commandWindowMs]);
 
@@ -258,18 +221,18 @@ export function useZaydounVoice({
   // Wake word
   // -------------------------------------------------------------------------
 
-  const handleWakeWord = useCallback(() => {
+  const handleWakeWord = useCallback(async () => {
     if (modeRef.current !== "passive") return;
     setModeSync("acknowledging");
     clearCommandTimer();
-    stopListening();
+    await stopListening();
     Speech.speak(`Yes, ${userName}?`, {
       language: "en-US",
       pitch: 1.0,
       rate: 0.9,
-      onDone: openCommandWindow,
-      onStopped: openCommandWindow,
-      onError: openCommandWindow,
+      onDone:    () => { void openCommandWindow(); },
+      onStopped: () => { void openCommandWindow(); },
+      onError:   () => { void openCommandWindow(); },
     });
   }, [setModeSync, clearCommandTimer, stopListening, userName, openCommandWindow]);
 
@@ -277,16 +240,16 @@ export function useZaydounVoice({
   // Command parsing
   // -------------------------------------------------------------------------
 
-  const handleCommand = useCallback((transcript: string) => {
-    if (STOP_RE.test(transcript))   { returnToPassive(); return; }
-    if (RECORD_RE.test(transcript)) { onStartRef.current?.(); returnToPassive(); return; }
-    if (SEND_RE.test(transcript))   { onSendRef.current?.();  returnToPassive(); return; }
+  const handleCommand = useCallback(async (transcript: string) => {
+    if (STOP_RE.test(transcript))   { await returnToPassive(); return; }
+    if (RECORD_RE.test(transcript)) { onStartRef.current?.(); await returnToPassive(); return; }
+    if (SEND_RE.test(transcript))   { onSendRef.current?.();  await returnToPassive(); return; }
     const m = OPEN_RE.exec(transcript);
     if (m) {
       const book = bestBookMatch(m[1].trim(), booksRef.current);
       if (book) {
         clearCommandTimer();
-        stopListening();
+        await stopListening();
         setModeSync("passive");
         router.push(`/conversation/index?bookId=${book.id}` as "/");
         scheduleRestart(2000);
@@ -295,78 +258,88 @@ export function useZaydounVoice({
   }, [returnToPassive, clearCommandTimer, stopListening, setModeSync, scheduleRestart]);
 
   // -------------------------------------------------------------------------
-  // Event subscriptions (only when STT module is available)
+  // Register Voice event handlers (once on mount)
+  // Handlers read current values via refs — no need to re-register on change.
   // -------------------------------------------------------------------------
 
   useEffect(() => {
-    if (!STT) return;
-
-    const resultSub = STT.addListener("result", (event: ResultEvent) => {
-      const transcript = event.results[0]?.transcript ?? "";
+    Voice.onSpeechResults = (e: SpeechResultsEvent) => {
+      const transcript = e.value?.[0] ?? "";
       if (!transcript) return;
       setLastTranscript(transcript);
-
       if (modeRef.current === "passive") {
         if (containsWakeWord(transcript)) handleWakeWord();
       } else if (modeRef.current === "command") {
-        if (event.isFinal) handleCommand(transcript);
-        else if (STOP_RE.test(transcript)) returnToPassive();
+        handleCommand(transcript);
       }
-    });
+    };
 
-    const errorSub = STT.addListener("error", (event: ErrorEvent) => {
-      const benign =
-        event.error === "no-speech" ||
-        event.error === "aborted" ||
-        event.error === "speech-timeout";
-      if (!benign) setError(event.message);
+    Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => {
+      const transcript = e.value?.[0] ?? "";
+      if (!transcript) return;
+      setLastTranscript(transcript);
+      // Check wake word on partials for faster response
+      if (modeRef.current === "passive" && containsWakeWord(transcript)) {
+        handleWakeWord();
+      }
+      // Check stop command on partials in command mode
+      if (modeRef.current === "command" && STOP_RE.test(transcript)) {
+        returnToPassive();
+      }
+    };
+
+    Voice.onSpeechError = (e: SpeechErrorEvent) => {
+      const code = e.error?.code ?? "";
+      const msg  = e.error?.message ?? "";
+      // Code 7 = "No match", common end-of-utterance — not a real error
+      const benign = code === "7" || code === "recognition_fail" || msg.includes("No match");
+      if (!benign) setError(msg);
       isListeningRef.current = false;
       setIsListening(false);
       if (enabledRef.current && (modeRef.current === "passive" || modeRef.current === "command")) {
-        scheduleRestart(benign ? 200 : 600);
+        scheduleRestart(benign ? 300 : 600);
       }
-    });
+    };
 
-    const endSub = STT.addListener("end", () => {
+    Voice.onSpeechEnd = () => {
       isListeningRef.current = false;
       setIsListening(false);
       if (enabledRef.current && (modeRef.current === "passive" || modeRef.current === "command")) {
         scheduleRestart(150);
       }
-    });
+    };
 
-    return () => { resultSub.remove(); errorSub.remove(); endSub.remove(); };
-  }, [handleWakeWord, handleCommand, returnToPassive, scheduleRestart]);
+    // Start immediately
+    if (enabled) startListening();
+
+    return () => {
+      clearCommandTimer();
+      clearRestartTimer();
+      Speech.stop();
+      Voice.onSpeechResults        = () => {};
+      Voice.onSpeechPartialResults = () => {};
+      Voice.onSpeechError          = () => {};
+      Voice.onSpeechEnd            = () => {};
+      Voice.destroy().catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — handlers close over stable refs
 
   // -------------------------------------------------------------------------
-  // Start / stop on enabled / permission change
+  // React to enabled toggling at runtime
   // -------------------------------------------------------------------------
 
   useEffect(() => {
-    if (enabled && hasPermission) {
-      startListening();
-    } else if (!enabled) {
+    if (!enabled) {
       clearCommandTimer();
       clearRestartTimer();
       Speech.stop();
       stopListening();
       setModeSync("passive");
+    } else if (!isListeningRef.current) {
+      startListening();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, hasPermission]);
+  }, [enabled, clearCommandTimer, clearRestartTimer, stopListening, startListening, setModeSync]);
 
-  // -------------------------------------------------------------------------
-  // Cleanup on unmount
-  // -------------------------------------------------------------------------
-
-  useEffect(() => {
-    return () => {
-      clearCommandTimer();
-      clearRestartTimer();
-      Speech.stop();
-      STT?.abort();
-    };
-  }, [clearCommandTimer, clearRestartTimer]);
-
-  return { mode, lastTranscript, isListening, error, hasPermission };
+  return { mode, lastTranscript, isListening, error };
 }

@@ -319,7 +319,7 @@ const s = StyleSheet.create({
     elevation: 6,
   },
   submitDim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.35)",
     borderRadius: 14,
   },

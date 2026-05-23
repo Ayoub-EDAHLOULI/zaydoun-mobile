@@ -8,10 +8,14 @@
     "scheme": "zaydounmobile",
     "userInterfaceStyle": "dark",
     "jsEngine": "hermes",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.ayoub.zaydoun"
+      "bundleIdentifier": "com.ayoub.zaydoun",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow $(PRODUCT_NAME) to use speech recognition.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone."
+      }
     },
     "android": {
       "versionCode": 1,
@@ -23,7 +27,8 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "navigationBarColor": "#0d0d0d",
-      "navigationBarStyle": "dark"
+      "navigationBarStyle": "dark",
+      "permissions": ["android.permission.RECORD_AUDIO"]
     },
     "web": {
       "output": "static",
@@ -34,17 +39,27 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 160,
+          "image": "./assets/images/splash.png",
           "resizeMode": "contain",
-          "backgroundColor": "#0d0d0d"
+          "backgroundColor": "#000000"
         }
       ],
-      "expo-speech-recognition"
+      "./plugins/withVoiceFix",
+      "@react-native-voice/voice",
+      "expo-font",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0854d939-a139-46ce-b931-816ba2e41eac"
+      }
     }
   }
 }
