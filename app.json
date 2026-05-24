@@ -28,9 +28,7 @@
       "predictiveBackGestureEnabled": false,
       "navigationBarColor": "#0d0d0d",
       "navigationBarStyle": "dark",
-      "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+      "permissions": ["android.permission.RECORD_AUDIO"]
     },
     "web": {
       "output": "static",
@@ -42,17 +40,25 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash.png",
-          "resizeMode": "contain",
+          "resizeMode": "cover",
           "backgroundColor": "#000000"
         }
       ],
-      "./plugins/withVoiceFix",
-      "@react-native-voice/voice",
       "expo-font",
       "expo-image",
       "expo-status-bar",
       "expo-web-browser",
-      "expo-audio"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "newArchEnabled": false
+          },
+          "ios": {
+            "newArchEnabled": false
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
