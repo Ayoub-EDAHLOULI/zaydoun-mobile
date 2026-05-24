@@ -23,7 +23,7 @@ export default function ConversationGateway() {
           router.replace(`/conversation/${conv.id}` as "/");
         }
       } catch {
-        router.replace("/(tabs)/library" as "/");
+        router.back();
       }
     })();
   }, [bookId]);

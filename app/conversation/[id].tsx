@@ -21,6 +21,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
+  BackHandler,
   Easing,
   FlatList,
   KeyboardAvoidingView,
@@ -35,7 +36,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import { conversationsService } from "@/lib/api/services/conversations.service";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage, useT } from "@/contexts/LanguageContext";
 import { useVoice } from "@/contexts/VoiceContext";
 import { ConversationDetail, MessageData } from "@/types/conversations.types";
 
@@ -59,6 +60,7 @@ const COLORS = {
 type RecordingState = "idle" | "recording" | "processing";
 
 function CopiedPopup({ visible }: { visible: boolean }) {
+  const t = useT();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(8)).current;
 
@@ -104,7 +106,7 @@ function CopiedPopup({ visible }: { visible: boolean }) {
         style={mb.copiedGradient}
       >
         <Check color="#0d0d0d" size={12} strokeWidth={3} />
-        <Text style={mb.copiedText}>Copied</Text>
+        <Text style={mb.copiedText}>{t.copied}</Text>
       </LinearGradient>
     </Animated.View>
   );
@@ -337,6 +339,7 @@ const viz = StyleSheet.create({
 export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { replyLanguage } = useLanguage();
+  const t = useT();
   const { setRecordingCallbacks, setVoiceEnabled } = useVoice();
   const [conversation, setConversation] = useState<ConversationDetail | null>(
     null,
@@ -352,13 +355,15 @@ export default function ConversationScreen() {
   const playerStatus = useAudioPlayerStatus(player);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const volumeAnim = useRef(new Animated.Value(0)).current;
-  const meteringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const meteringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
   const autoSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasSpokenRef = useRef(false);
   const SILENCE_THRESHOLD_DB = -38; // dBFS — below this counts as silence
-  const SILENCE_SEND_MS = 1500;     // auto-send after 1.5s of continuous silence
-  const MAX_RECORD_MS = 30000;      // hard cap so it never runs forever
+  const SILENCE_SEND_MS = 1500; // auto-send after 1.5s of continuous silence
+  const MAX_RECORD_MS = 30000; // hard cap so it never runs forever
   const isPlayingAudio = playerStatus.playing;
   const flatListRef = useRef<FlatList>(null);
 
@@ -367,12 +372,23 @@ export default function ConversationScreen() {
   useEffect(() => {
     if (wasPlayingRef.current && !isPlayingAudio) {
       // Playback just ended — restore audio mode for recording then wake STT
-      setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true }).then(
-        () => setVoiceEnabled(true),
-      );
+      setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      }).then(() => setVoiceEnabled(true));
     }
     wasPlayingRef.current = isPlayingAudio;
   }, [isPlayingAudio]);
+
+  // Android hardware back button — go to previous screen, never reset to tabs root
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      router.back();
+      return true; // prevent default behaviour
+    });
+    return () => sub.remove();
+  }, []);
 
   // Load conversation
   useEffect(() => {
@@ -384,7 +400,7 @@ export default function ConversationScreen() {
         setMessages(conv.messages);
       })
       .catch(() => {
-        Toast.show({ type: "error", text1: "Failed to load conversation" });
+        Toast.show({ type: "error", text1: t.failed_to_load });
         router.back();
       });
   }, [id]);
@@ -448,10 +464,13 @@ export default function ConversationScreen() {
     try {
       const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
-        Toast.show({ type: "error", text1: "Microphone permission denied" });
+        Toast.show({ type: "error", text1: t.mic_permission_denied });
         return;
       }
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
       await recorder.prepareToRecordAsync();
       recorder.record();
       setVoiceEnabled(false);
@@ -498,7 +517,7 @@ export default function ConversationScreen() {
         }
       }, 80);
     } catch {
-      Toast.show({ type: "error", text1: "Could not start recording" });
+      Toast.show({ type: "error", text1: t.could_not_record });
     }
   };
 
@@ -547,8 +566,8 @@ export default function ConversationScreen() {
     } catch (err) {
       Toast.show({
         type: "error",
-        text1: "Failed",
-        text2: err instanceof Error ? err.message : "Could not process voice",
+        text1: t.failed,
+        text2: err instanceof Error ? err.message : t.could_not_process_voice,
       });
       setVoiceEnabled(true); // re-enable on error since playback never started
     } finally {
@@ -593,7 +612,6 @@ export default function ConversationScreen() {
         content,
         replyLanguage.code,
       );
-      // Replace temp user msg with real one, then append AI reply
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== tempUserMsg.id),
         { ...tempUserMsg, id: `u-${Date.now()}` },
@@ -605,8 +623,8 @@ export default function ConversationScreen() {
       setMessages((prev) => prev.filter((m) => m.id !== tempUserMsg.id));
       Toast.show({
         type: "error",
-        text1: "Failed",
-        text2: err instanceof Error ? err.message : "Could not send message",
+        text1: t.failed,
+        text2: err instanceof Error ? err.message : t.could_not_send_message,
       });
     } finally {
       setSending(false);
@@ -659,7 +677,7 @@ export default function ConversationScreen() {
           <Text style={s.headerTitle} numberOfLines={1}>
             {bookTitle}
           </Text>
-          <Text style={s.headerSub}>Zaydoun · Voice assistant</Text>
+          <Text style={s.headerSub}>{t.voice_assistant_sub}</Text>
         </View>
         <TouchableOpacity
           onPress={() => setShowTextInput((v) => !v)}
@@ -690,9 +708,7 @@ export default function ConversationScreen() {
           onContentSizeChange={scrollToBottom}
           ListEmptyComponent={
             <View style={s.emptyChat}>
-              <Text style={s.emptyChatText}>
-                Hold the mic and ask anything about the book
-              </Text>
+              <Text style={s.emptyChatText}>{t.empty_chat_hint}</Text>
             </View>
           }
         />
@@ -702,7 +718,7 @@ export default function ConversationScreen() {
           <View style={s.textRow}>
             <TextInput
               style={s.textField}
-              placeholder="Type a message…"
+              placeholder={t.type_message}
               placeholderTextColor={COLORS.textDisabled}
               value={textInput}
               onChangeText={setTextInput}
@@ -731,7 +747,7 @@ export default function ConversationScreen() {
           <View style={s.voiceArea}>
             {isProcessing ? (
               <View style={s.processingWrap}>
-                <Text style={s.processingText}>Zaydoun is thinking…</Text>
+                <Text style={s.processingText}>{t.zaydoun_thinking}</Text>
               </View>
             ) : isRecording ? (
               <View style={s.recordingRow}>
@@ -775,18 +791,16 @@ export default function ConversationScreen() {
                   <VoiceBars volumeAnim={volumeAnim} />
                 </View>
 
-                <Text style={s.recordingHint}>
-                  Tap to send · sends on silence
-                </Text>
+                <Text style={s.recordingHint}>{t.tap_to_send}</Text>
               </View>
             ) : isPlayingAudio ? (
               <View style={s.idleRow}>
                 <PlaybackBars isPlaying={true} />
-                <Text style={s.playingHint}>Zaydoun is speaking…</Text>
+                <Text style={s.playingHint}>{t.zaydoun_speaking}</Text>
               </View>
             ) : (
               <View style={s.idleRow}>
-                <Text style={s.idleHint}>Hold to talk</Text>
+                <Text style={s.idleHint}>{t.hold_to_talk}</Text>
                 <Pressable
                   onPressIn={startRecording}
                   style={({ pressed }) => [
@@ -803,7 +817,7 @@ export default function ConversationScreen() {
                     </LinearGradient>
                   </View>
                 </Pressable>
-                <Text style={s.idleHint}>with Zaydoun</Text>
+                <Text style={s.idleHint}>{t.with_zaydoun}</Text>
               </View>
             )}
           </View>

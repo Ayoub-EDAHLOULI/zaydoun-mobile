@@ -20,7 +20,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
-import { LANGUAGES, useLanguage } from "@/contexts/LanguageContext";
+import { LANGUAGES, useLanguage, useT } from "@/contexts/LanguageContext";
 import { useVoice } from "@/contexts/VoiceContext";
 import { useState } from "react";
 
@@ -60,8 +60,10 @@ function InfoRow({
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
-  const { replyLanguage, setReplyLanguage } = useLanguage();
+  const { replyLanguage, setReplyLanguage, uiLanguage, setUiLanguage } =
+    useLanguage();
   const { voiceModeEnabled, setVoiceModeEnabled } = useVoice();
+  const t = useT();
 
   const initials = user?.name
     ? user.name
@@ -91,7 +93,7 @@ export default function ProfileScreen() {
       >
         {/* Header */}
         <View style={s.header}>
-          <Text style={s.pageTitle}>Profile</Text>
+          <Text style={s.pageTitle}>{t.profile}</Text>
         </View>
 
         {/* Avatar card */}
@@ -114,20 +116,20 @@ export default function ProfileScreen() {
               style={s.badgeGradient}
             >
               <BookOpen color={COLORS.primary} size={11} strokeWidth={2} />
-              <Text style={s.badgeText}>Reader</Text>
+              <Text style={s.badgeText}>{t.reader_badge}</Text>
             </LinearGradient>
           </View>
         </View>
 
         {/* Info section */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Account</Text>
+          <Text style={s.sectionTitle}>{t.account}</Text>
           <View style={s.card}>
             <InfoRow
               icon={
                 <User color={COLORS.textDisabled} size={16} strokeWidth={1.8} />
               }
-              label="Full Name"
+              label={t.full_name_label}
               value={user?.name ?? "—"}
             />
             <View style={s.divider} />
@@ -135,7 +137,7 @@ export default function ProfileScreen() {
               icon={
                 <Mail color={COLORS.textDisabled} size={16} strokeWidth={1.8} />
               }
-              label="Email"
+              label={t.email_label}
               value={user?.email ?? "—"}
             />
             <View style={s.divider} />
@@ -147,7 +149,7 @@ export default function ProfileScreen() {
                   strokeWidth={1.8}
                 />
               }
-              label="Member Since"
+              label={t.member_since}
               value={memberSince}
             />
           </View>
@@ -155,7 +157,7 @@ export default function ProfileScreen() {
 
         {/* Reply Language */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Zaydoun Replies In</Text>
+          <Text style={s.sectionTitle}>{t.zaydoun_replies_in}</Text>
           <View style={s.card}>
             <View style={s.langHeader}>
               <View style={s.infoIcon}>
@@ -166,7 +168,7 @@ export default function ProfileScreen() {
                 />
               </View>
               <View style={s.infoText}>
-                <Text style={s.infoLabel}>Reply Language</Text>
+                <Text style={s.infoLabel}>{t.reply_language}</Text>
                 <Text style={s.infoValue}>
                   {replyLanguage.flag} {replyLanguage.label}
                 </Text>
@@ -197,18 +199,62 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* App Language */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>{t.ui_language}</Text>
+          <View style={s.card}>
+            <View style={s.langHeader}>
+              <View style={s.infoIcon}>
+                <Languages
+                  color={COLORS.textDisabled}
+                  size={16}
+                  strokeWidth={1.8}
+                />
+              </View>
+              <View style={s.infoText}>
+                <Text style={s.infoLabel}>{t.app_language}</Text>
+                <Text style={s.infoValue}>
+                  {uiLanguage.flag} {uiLanguage.label}
+                </Text>
+              </View>
+            </View>
+            <View style={s.divider} />
+            <View style={s.langGrid}>
+              {LANGUAGES.map((lang) => {
+                const active = lang.code === uiLanguage.code;
+                return (
+                  <TouchableOpacity
+                    key={lang.code}
+                    style={[s.langChip, active && s.langChipActive]}
+                    onPress={() => setUiLanguage(lang)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={s.langFlag}>{lang.flag}</Text>
+                    <Text style={[s.langLabel, active && s.langLabelActive]}>
+                      {lang.label}
+                    </Text>
+                    <Text style={[s.langNative, active && s.langNativeActive]}>
+                      {lang.nativeLabel}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+
         {/* Voice Assistant */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Voice Assistant</Text>
+          <Text style={s.sectionTitle}>{t.voice_assistant}</Text>
           <View style={s.card}>
             <View style={s.infoRow}>
               <View style={s.infoIcon}>
                 <Mic color={COLORS.textDisabled} size={16} strokeWidth={1.8} />
               </View>
               <View style={[s.infoText, { flex: 1 }]}>
-                <Text style={s.infoLabel}>Zaydoun Mode</Text>
+                <Text style={s.infoLabel}>{t.zaydoun_mode}</Text>
                 <Text style={s.infoValue}>
-                  {voiceModeEnabled ? "Active — say «Zaydoun»" : "Disabled"}
+                  {voiceModeEnabled ? t.voice_active : t.voice_disabled}
                 </Text>
               </View>
               <Switch
@@ -229,7 +275,7 @@ export default function ProfileScreen() {
             activeOpacity={0.75}
           >
             <LogOut color={COLORS.error} size={18} strokeWidth={1.8} />
-            <Text style={s.logoutText}>Sign Out</Text>
+            <Text style={s.logoutText}>{t.sign_out}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -251,10 +297,8 @@ export default function ProfileScreen() {
               <LogOut color={COLORS.error} size={22} strokeWidth={1.8} />
             </View>
 
-            <Text style={s.modalTitle}>Sign Out</Text>
-            <Text style={s.modalBody}>
-              Are you sure you want to sign out of your account?
-            </Text>
+            <Text style={s.modalTitle}>{t.sign_out}</Text>
+            <Text style={s.modalBody}>{t.sign_out_confirm}</Text>
 
             {/* Buttons */}
             <View style={s.modalActions}>
@@ -263,12 +307,15 @@ export default function ProfileScreen() {
                 onPress={() => setShowLogoutModal(false)}
                 activeOpacity={0.75}
               >
-                <Text style={s.modalCancelText}>Cancel</Text>
+                <Text style={s.modalCancelText}>{t.cancel}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={s.modalConfirmBtn}
-                onPress={() => { setShowLogoutModal(false); logout(); }}
+                onPress={() => {
+                  setShowLogoutModal(false);
+                  logout();
+                }}
                 activeOpacity={0.75}
               >
                 <LinearGradient
@@ -278,7 +325,7 @@ export default function ProfileScreen() {
                   style={s.modalConfirmGradient}
                 >
                   <LogOut color="#fff" size={15} strokeWidth={2} />
-                  <Text style={s.modalConfirmText}>Sign Out</Text>
+                  <Text style={s.modalConfirmText}>{t.sign_out}</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>

@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useT } from "@/contexts/LanguageContext";
 import { authService } from "@/lib/api/services/auth.service";
 import { authValidation } from "@/validations/auth.validations";
 
@@ -34,12 +35,8 @@ const COLORS = {
   border: "rgba(201,168,76,0.15)",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
-  emailRequired: "Email is required",
-  emailInvalid: "Enter a valid email address",
-};
-
 export default function ForgotPasswordScreen() {
+  const t = useT();
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState<string | undefined>();
   const [touched, setTouched] = useState(false);
@@ -120,7 +117,7 @@ export default function ForgotPasswordScreen() {
           showsVerticalScrollIndicator={false}
         >
           <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-            <Text style={s.backText}>← Back</Text>
+            <Text style={s.backText}>{t.back}</Text>
           </TouchableOpacity>
 
           <View style={s.header}>
@@ -136,10 +133,8 @@ export default function ForgotPasswordScreen() {
                 </View>
               </LinearGradient>
             </View>
-            <Text style={s.title}>Forgot password?</Text>
-            <Text style={s.subtitle}>
-              We'll send a reset link to your inbox
-            </Text>
+            <Text style={s.title}>{t.forgot_password_title}</Text>
+            <Text style={s.subtitle}>{t.forgot_password_subtitle}</Text>
           </View>
 
           {submitted ? (
@@ -151,18 +146,14 @@ export default function ForgotPasswordScreen() {
                   strokeWidth={1.5}
                 />
               </View>
-              <Text style={s.successTitle}>Check your inbox</Text>
-              <Text style={s.successBody}>
-                If <Text style={s.successEmail}>{email.trim()}</Text> is
-                registered, a reset link is on its way. Check your spam folder
-                too.
-              </Text>
+              <Text style={s.successTitle}>{t.check_your_inbox}</Text>
+              <Text style={s.successBody}>{t.reset_link_sent}</Text>
               <TouchableOpacity
                 onPress={() => router.back()}
                 style={s.backToLoginBtn}
                 activeOpacity={0.75}
               >
-                <Text style={s.backToLoginText}>Back to Sign In</Text>
+                <Text style={s.backToLoginText}>{t.back_to_sign_in}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -185,7 +176,7 @@ export default function ForgotPasswordScreen() {
                   </View>
                   <TextInput
                     style={s.input}
-                    placeholder="Email address"
+                    placeholder={t.email_address}
                     placeholderTextColor={COLORS.textDisabled}
                     value={email}
                     onChangeText={(v) => {
@@ -204,7 +195,11 @@ export default function ForgotPasswordScreen() {
                 </View>
                 {touched && emailError && (
                   <Text style={s.fieldError}>
-                    {ERROR_MESSAGES[emailError] ?? emailError}
+                    {emailError === "emailRequired"
+                      ? t.email_required
+                      : emailError === "emailInvalid"
+                        ? t.email_invalid
+                        : emailError}
                   </Text>
                 )}
               </View>
@@ -224,7 +219,7 @@ export default function ForgotPasswordScreen() {
                   >
                     {isLoading && <View style={s.submitDim} />}
                     <Text style={s.submitText}>
-                      {isLoading ? "Sending…" : "Send Reset Link"}
+                      {isLoading ? t.sending : t.send_reset_link}
                     </Text>
                   </LinearGradient>
                 </TouchableOpacity>

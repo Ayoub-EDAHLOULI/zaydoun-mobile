@@ -21,6 +21,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useT } from "@/contexts/LanguageContext";
 import { authService } from "@/lib/api/services/auth.service";
 import { authValidation } from "@/validations/auth.validations";
 
@@ -38,15 +39,6 @@ const COLORS = {
   error: "#e05c5c",
   success: "#4caf7d",
   border: "rgba(201,168,76,0.15)",
-};
-
-const ERROR_MESSAGES: Record<string, string> = {
-  passwordRequired: "Password is required",
-  passwordMin: "Password must be at least 8 characters",
-  passwordMax: "Password is too long",
-  passwordWeak: "Must contain uppercase, lowercase and a number",
-  confirmRequired: "Please confirm your password",
-  confirmMismatch: "Passwords do not match",
 };
 
 function InputField({
@@ -68,6 +60,15 @@ function InputField({
   secureTextEntry?: boolean;
   rightElement?: React.ReactNode;
 }) {
+  const t = useT();
+  const ERROR_MESSAGES: Record<string, string> = {
+    passwordRequired: t.password_required,
+    passwordMin: t.password_min,
+    passwordMax: t.password_max,
+    passwordWeak: t.password_weak,
+    confirmRequired: t.confirm_required,
+    confirmMismatch: t.confirm_mismatch,
+  };
   return (
     <View style={s.fieldWrap}>
       <View style={[s.inputRow, !!error && s.inputRowError]}>
@@ -95,6 +96,7 @@ function InputField({
 
 export default function ResetPasswordScreen() {
   const { token } = useLocalSearchParams<{ token: string }>();
+  const t = useT();
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -188,10 +190,8 @@ export default function ResetPasswordScreen() {
           <View style={s.errorIconWrap}>
             <AlertTriangle color={COLORS.error} size={32} strokeWidth={1.5} />
           </View>
-          <Text style={s.stateTitle}>Invalid link</Text>
-          <Text style={s.stateBody}>
-            This reset link is missing or invalid. Request a new one.
-          </Text>
+          <Text style={s.stateTitle}>{t.invalid_link}</Text>
+          <Text style={s.stateBody}>{t.invalid_link_desc}</Text>
           <TouchableOpacity
             onPress={() => router.replace("/(auth)/forgot-password" as "/")}
             style={s.actionBtn}
@@ -203,7 +203,7 @@ export default function ResetPasswordScreen() {
               end={{ x: 1, y: 0 }}
               style={s.actionBtnGradient}
             >
-              <Text style={s.actionBtnText}>Request new link</Text>
+              <Text style={s.actionBtnText}>{t.request_new_link}</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -223,10 +223,8 @@ export default function ResetPasswordScreen() {
           <View style={s.successIconWrap}>
             <CheckCircle color={COLORS.success} size={32} strokeWidth={1.5} />
           </View>
-          <Text style={s.stateTitle}>Password reset!</Text>
-          <Text style={s.stateBody}>
-            Your password has been updated. Sign in with your new password.
-          </Text>
+          <Text style={s.stateTitle}>{t.password_reset_success}</Text>
+          <Text style={s.stateBody}>{t.password_updated}</Text>
           <TouchableOpacity
             onPress={() => router.replace("/(auth)/login" as "/")}
             style={s.actionBtn}
@@ -238,7 +236,7 @@ export default function ResetPasswordScreen() {
               end={{ x: 1, y: 0 }}
               style={s.actionBtnGradient}
             >
-              <Text style={s.actionBtnText}>Sign In</Text>
+              <Text style={s.actionBtnText}>{t.sign_in}</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -264,7 +262,7 @@ export default function ResetPasswordScreen() {
           showsVerticalScrollIndicator={false}
         >
           <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-            <Text style={s.backText}>← Back</Text>
+            <Text style={s.backText}>{t.back}</Text>
           </TouchableOpacity>
 
           <View style={s.header}>
@@ -280,10 +278,8 @@ export default function ResetPasswordScreen() {
                 </View>
               </LinearGradient>
             </View>
-            <Text style={s.title}>New password</Text>
-            <Text style={s.subtitle}>
-              Choose a strong password for your account
-            </Text>
+            <Text style={s.title}>{t.reset_password_title}</Text>
+            <Text style={s.subtitle}>{t.reset_password_subtitle}</Text>
           </View>
 
           <Animated.View
@@ -299,7 +295,7 @@ export default function ResetPasswordScreen() {
               icon={
                 <Lock color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
               }
-              placeholder="New password"
+              placeholder={t.new_password}
               value={password}
               onChangeText={(v) => {
                 setPassword(v);
@@ -337,7 +333,7 @@ export default function ResetPasswordScreen() {
               icon={
                 <Lock color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
               }
-              placeholder="Confirm new password"
+              placeholder={t.confirm_new_password}
               value={confirmPassword}
               onChangeText={(v) => {
                 setConfirmPassword(v);
@@ -388,7 +384,7 @@ export default function ResetPasswordScreen() {
                 >
                   {isLoading && <View style={s.submitDim} />}
                   <Text style={s.submitText}>
-                    {isLoading ? "Resetting…" : "Reset Password"}
+                    {isLoading ? t.resetting : t.reset_password_btn}
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>

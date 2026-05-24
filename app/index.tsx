@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { BookOpen } from "lucide-react-native";
 import { useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useT } from "@/contexts/LanguageContext";
 import {
   Animated,
   Dimensions,
@@ -86,6 +87,7 @@ function Particle({ index, total }: { index: number; total: number }) {
 
 export default function HomeScreen() {
   const { isAuthenticated, isLoading } = useAuth();
+  const t = useT();
 
   const handleConnect = () => {
     if (isLoading) return;
@@ -179,7 +181,7 @@ export default function HomeScreen() {
 
         {/* Center orb */}
         <View style={s.main}>
-          <Text style={s.statusText}>POCKET COMPANION</Text>
+          <Text style={s.statusText}>{t.pocket_companion}</Text>
 
           <View style={s.orbWrap}>
             {/* Glow halo */}
@@ -263,8 +265,9 @@ export default function HomeScreen() {
           </View>
 
           <Text style={s.tagline}>
-            Speak to your{"\n"}
-            <Text style={s.taglineAccent}>Library.</Text>
+            {t.speak_to_your_library}
+            {"\n"}
+            <Text style={s.taglineAccent}>{t.library_accent}</Text>
           </Text>
         </View>
 
@@ -282,11 +285,11 @@ export default function HomeScreen() {
               end={{ x: 1, y: 0 }}
               style={s.ctaBtn}
             >
-              <Text style={s.ctaText}>Connect to Dashboard</Text>
+              <Text style={s.ctaText}>{t.connect_to_dashboard}</Text>
             </LinearGradient>
           </Pressable>
 
-          <Text style={s.signinText}>Requires an active web session</Text>
+          <Text style={s.signinText}>{t.sign_in_with_zaydoun_account}</Text>
         </View>
       </Animated.View>
     </SafeAreaView>

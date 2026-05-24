@@ -33,6 +33,7 @@ import Toast from "react-native-toast-message";
 import ConfirmModal from "@/components/ConfirmModal";
 import { booksService } from "@/lib/api/services/books.service";
 import { BookSummary, BookStatus } from "@/types/books.types";
+import { useT } from "@/contexts/LanguageContext";
 import { uploadBookSchema } from "@/validations/books.validations";
 
 const COLORS = {
@@ -51,30 +52,11 @@ const COLORS = {
   border: "rgba(201,168,76,0.12)",
 };
 
-const STATUS_CONFIG: Record<
-  BookStatus,
-  { color: string; icon: React.ReactNode; label: string }
-> = {
-  READY: {
-    color: COLORS.success,
-    icon: <CheckCircle size={13} color={COLORS.success} strokeWidth={2} />,
-    label: "Ready",
-  },
-  PROCESSING: {
-    color: COLORS.warning,
-    icon: <RefreshCw size={13} color={COLORS.warning} strokeWidth={2} />,
-    label: "Processing",
-  },
-  PENDING: {
-    color: COLORS.textDisabled,
-    icon: <Clock size={13} color={COLORS.textDisabled} strokeWidth={2} />,
-    label: "Pending",
-  },
-  FAILED: {
-    color: COLORS.error,
-    icon: <AlertCircle size={13} color={COLORS.error} strokeWidth={2} />,
-    label: "Failed",
-  },
+const STATUS_COLORS: Record<BookStatus, string> = {
+  READY: COLORS.success,
+  PROCESSING: COLORS.warning,
+  PENDING: COLORS.textDisabled,
+  FAILED: COLORS.error,
 };
 
 const LANGUAGES: { code: string; label: string; flag: string }[] = [
@@ -95,7 +77,28 @@ function BookCard({
   onProcess: (id: string, title: string) => void;
   onDiscuss: (bookId: string) => void;
 }) {
-  const status = STATUS_CONFIG[book.status];
+  const t = useT();
+  const STATUS_LABELS: Record<BookStatus, string> = {
+    READY: t.ready,
+    PROCESSING: t.processing_status,
+    PENDING: t.pending_status,
+    FAILED: t.failed_status,
+  };
+  const STATUS_ICONS: Record<BookStatus, React.ReactNode> = {
+    READY: (
+      <CheckCircle size={13} color={STATUS_COLORS.READY} strokeWidth={2} />
+    ),
+    PROCESSING: (
+      <RefreshCw size={13} color={STATUS_COLORS.PROCESSING} strokeWidth={2} />
+    ),
+    PENDING: <Clock size={13} color={STATUS_COLORS.PENDING} strokeWidth={2} />,
+    FAILED: (
+      <AlertCircle size={13} color={STATUS_COLORS.FAILED} strokeWidth={2} />
+    ),
+  };
+  const statusColor = STATUS_COLORS[book.status];
+  const statusLabel = STATUS_LABELS[book.status];
+  const statusIcon = STATUS_ICONS[book.status];
   const isReady = book.status === "READY";
   const isProcessing = book.status === "PROCESSING";
 
@@ -120,11 +123,11 @@ function BookCard({
         )}
         <View style={bc.meta}>
           <View
-            style={[bc.statusBadge, { backgroundColor: `${status.color}14` }]}
+            style={[bc.statusBadge, { backgroundColor: `${statusColor}14` }]}
           >
-            {status.icon}
-            <Text style={[bc.statusText, { color: status.color }]}>
-              {status.label}
+            {statusIcon}
+            <Text style={[bc.statusText, { color: statusColor }]}>
+              {statusLabel}
             </Text>
           </View>
           <Text style={bc.pages}>
@@ -221,6 +224,7 @@ const bc = StyleSheet.create({
 });
 
 export default function LibraryScreen() {
+  const t = useT();
   const [books, setBooks] = useState<BookSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -419,18 +423,18 @@ export default function LibraryScreen() {
     <SafeAreaView style={s.safe} edges={["top", "left", "right"]}>
       <ConfirmModal
         visible={!!processTarget}
-        title="Process Book"
+        title={t.process_book}
         message={`Start processing "${processTarget?.title}"? This will re-index the book.`}
-        confirmLabel="Process"
+        confirmLabel={t.process}
         variant="warning"
         onConfirm={confirmProcess}
         onCancel={() => setProcessTarget(null)}
       />
       <ConfirmModal
         visible={!!deleteTarget}
-        title="Delete Book"
+        title={t.delete_book}
         message={`Remove "${deleteTarget?.title}" from your library? This cannot be undone.`}
-        confirmLabel="Delete"
+        confirmLabel={t.delete}
         variant="danger"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
@@ -439,7 +443,7 @@ export default function LibraryScreen() {
       {/* Header */}
       <View style={s.header}>
         <View>
-          <Text style={s.pageTitle}>Library</Text>
+          <Text style={s.pageTitle}>{t.library}</Text>
           <Text style={s.pageSubtitle}>
             {books.length} {books.length === 1 ? "book" : "books"}
           </Text>
@@ -475,13 +479,13 @@ export default function LibraryScreen() {
       >
         {loading ? (
           <View style={s.empty}>
-            <Text style={s.emptyText}>Loading…</Text>
+            <Text style={s.emptyText}>{t.loading}</Text>
           </View>
         ) : books.length === 0 ? (
           <View style={s.empty}>
             <BookOpen color={COLORS.textDisabled} size={48} strokeWidth={1.2} />
-            <Text style={s.emptyTitle}>No books yet</Text>
-            <Text style={s.emptyText}>Upload a PDF to get started</Text>
+            <Text style={s.emptyTitle}>{t.no_books_yet}</Text>
+            <Text style={s.emptyText}>{t.upload_pdf_hint}</Text>
           </View>
         ) : (
           books.map((book) => (
@@ -516,7 +520,7 @@ export default function LibraryScreen() {
             style={[s.sheet, { transform: [{ translateY: slideAnim }] }]}
           >
             <View style={s.sheetHeader}>
-              <Text style={s.sheetTitle}>Upload Book</Text>
+              <Text style={s.sheetTitle}>{t.upload_book}</Text>
               <TouchableOpacity onPress={closeModal} hitSlop={8}>
                 <X color={COLORS.textDisabled} size={20} strokeWidth={2} />
               </TouchableOpacity>
@@ -551,7 +555,7 @@ export default function LibraryScreen() {
                       size={20}
                       strokeWidth={1.8}
                     />
-                    <Text style={s.filePickerText}>Select PDF file</Text>
+                    <Text style={s.filePickerText}>{t.select_pdf}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -561,10 +565,10 @@ export default function LibraryScreen() {
 
               {/* Title */}
               <View style={[s.fieldWrap, { marginTop: 16 }]}>
-                <Text style={s.fieldLabel}>Title</Text>
+                <Text style={s.fieldLabel}>{t.book_title}</Text>
                 <TextInput
                   style={[s.input, formErrors.title && s.inputError]}
-                  placeholder="Book title"
+                  placeholder={t.book_title}
                   placeholderTextColor={COLORS.textDisabled}
                   value={title}
                   onChangeText={(v) => {
@@ -582,11 +586,11 @@ export default function LibraryScreen() {
               {/* Author */}
               <View style={[s.fieldWrap, { marginTop: 16 }]}>
                 <Text style={s.fieldLabel}>
-                  Author <Text style={s.optional}>(optional)</Text>
+                  {t.author} <Text style={s.optional}>{t.optional}</Text>
                 </Text>
                 <TextInput
                   style={s.input}
-                  placeholder="Author name"
+                  placeholder={t.author_placeholder}
                   placeholderTextColor={COLORS.textDisabled}
                   value={author}
                   onChangeText={setAuthor}
@@ -597,12 +601,15 @@ export default function LibraryScreen() {
 
               {/* Language */}
               <View style={[s.fieldWrap, { marginTop: 16 }]}>
-                <Text style={s.fieldLabel}>Language</Text>
+                <Text style={s.fieldLabel}>{t.language}</Text>
                 <View style={s.langRow}>
                   {LANGUAGES.map((l) => (
                     <TouchableOpacity
                       key={l.code}
-                      style={[s.langBtn, language === l.code && s.langBtnActive]}
+                      style={[
+                        s.langBtn,
+                        language === l.code && s.langBtnActive,
+                      ]}
                       onPress={() => setLanguage(l.code)}
                       activeOpacity={0.8}
                     >
@@ -635,7 +642,7 @@ export default function LibraryScreen() {
                 >
                   {uploading && <View style={s.submitDim} />}
                   <Text style={s.submitText}>
-                    {uploading ? "Uploading…" : "Upload Book"}
+                    {uploading ? t.uploading : t.upload_book}
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>

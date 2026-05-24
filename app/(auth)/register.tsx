@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
+import { useT } from "@/contexts/LanguageContext";
 import { authService } from "@/lib/api/services/auth.service";
 import { authValidation } from "@/validations/auth.validations";
 
@@ -35,21 +36,21 @@ const COLORS = {
   border: "rgba(201,168,76,0.15)",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
-  nameRequired: "Name is required",
-  nameMin: "Name must be at least 2 characters",
-  emailRequired: "Email is required",
-  emailInvalid: "Enter a valid email address",
-  passwordRequired: "Password is required",
-  passwordMin: "Password must be at least 8 characters",
-  passwordMax: "Password is too long",
-  passwordWeak: "Must contain uppercase, lowercase and a number",
-  confirmRequired: "Please confirm your password",
-  confirmMismatch: "Passwords do not match",
-};
-
 function FieldError({ message }: { message?: string }) {
+  const t = useT();
   if (!message) return null;
+  const ERROR_MESSAGES: Record<string, string> = {
+    nameRequired: t.name_required,
+    nameMin: t.name_min,
+    emailRequired: t.email_required,
+    emailInvalid: t.email_invalid,
+    passwordRequired: t.password_required,
+    passwordMin: t.password_min,
+    passwordMax: t.password_max,
+    passwordWeak: t.password_weak,
+    confirmRequired: t.confirm_required,
+    confirmMismatch: t.confirm_mismatch,
+  };
   return <Text style={s.fieldError}>{ERROR_MESSAGES[message] ?? message}</Text>;
 }
 
@@ -100,6 +101,7 @@ function InputField({
 
 export default function RegisterScreen() {
   const { login } = useAuth();
+  const t = useT();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -219,7 +221,7 @@ export default function RegisterScreen() {
           showsVerticalScrollIndicator={false}
         >
           <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-            <Text style={s.backText}>← Back</Text>
+            <Text style={s.backText}>{t.back}</Text>
           </TouchableOpacity>
 
           <View style={s.header}>
@@ -235,8 +237,8 @@ export default function RegisterScreen() {
                 </View>
               </LinearGradient>
             </View>
-            <Text style={s.title}>Create account</Text>
-            <Text style={s.subtitle}>Start your reading journey</Text>
+            <Text style={s.title}>{t.create_account}</Text>
+            <Text style={s.subtitle}>{t.start_journey}</Text>
           </View>
 
           <Animated.View
@@ -252,7 +254,7 @@ export default function RegisterScreen() {
               icon={
                 <User color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
               }
-              placeholder="Full name"
+              placeholder={t.full_name}
               value={name}
               onChangeText={(v) => {
                 setName(v);
@@ -266,7 +268,7 @@ export default function RegisterScreen() {
               icon={
                 <Mail color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
               }
-              placeholder="Email address"
+              placeholder={t.email_address}
               value={email}
               onChangeText={(v) => {
                 setEmail(v);
@@ -281,7 +283,7 @@ export default function RegisterScreen() {
               icon={
                 <Lock color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
               }
-              placeholder="Password"
+              placeholder={t.password}
               value={password}
               onChangeText={(v) => {
                 setPassword(v);
@@ -316,7 +318,7 @@ export default function RegisterScreen() {
               icon={
                 <Lock color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
               }
-              placeholder="Confirm password"
+              placeholder={t.confirm_password}
               value={confirmPassword}
               onChangeText={(v) => {
                 setConfirmPassword(v);
@@ -364,7 +366,7 @@ export default function RegisterScreen() {
                 >
                   {isLoading && <View style={s.submitDim} />}
                   <Text style={s.submitText}>
-                    {isLoading ? "Creating account…" : "Create Account"}
+                    {isLoading ? t.creating_account : t.create_account}
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>
@@ -373,8 +375,8 @@ export default function RegisterScreen() {
 
           <TouchableOpacity onPress={() => router.back()} style={s.footerLink}>
             <Text style={s.footerText}>
-              Already have an account?{" "}
-              <Text style={s.footerAccent}>Sign in</Text>
+              {t.already_have_account}{" "}
+              <Text style={s.footerAccent}>{t.sign_in_link}</Text>
             </Text>
           </TouchableOpacity>
         </ScrollView>

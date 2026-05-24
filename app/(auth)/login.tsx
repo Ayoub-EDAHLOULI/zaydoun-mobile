@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
+import { useT } from "@/contexts/LanguageContext";
 import { authValidation } from "@/validations/auth.validations";
 
 const { width } = Dimensions.get("window");
@@ -34,17 +35,17 @@ const COLORS = {
   border: "rgba(201,168,76,0.15)",
 };
 
-const ERROR_MESSAGES: Record<string, string> = {
-  emailRequired: "Email is required",
-  emailInvalid: "Enter a valid email address",
-  passwordRequired: "Password is required",
-  passwordMin: "Password must be at least 8 characters",
-  passwordMax: "Password is too long",
-  passwordWeak: "Must contain uppercase, lowercase and a number",
-};
-
 function FieldError({ message }: { message?: string }) {
+  const t = useT();
   if (!message) return null;
+  const ERROR_MESSAGES: Record<string, string> = {
+    emailRequired: t.email_required,
+    emailInvalid: t.email_invalid,
+    passwordRequired: t.password_required,
+    passwordMin: t.password_min,
+    passwordMax: t.password_max,
+    passwordWeak: t.password_weak,
+  };
   return <Text style={s.fieldError}>{ERROR_MESSAGES[message] ?? message}</Text>;
 }
 
@@ -95,6 +96,7 @@ function InputField({
 
 export default function LoginScreen() {
   const { login } = useAuth();
+  const t = useT();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -200,7 +202,7 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-            <Text style={s.backText}>← Back</Text>
+            <Text style={s.backText}>{t.back}</Text>
           </TouchableOpacity>
 
           <View style={s.header}>
@@ -216,8 +218,8 @@ export default function LoginScreen() {
                 </View>
               </LinearGradient>
             </View>
-            <Text style={s.title}>Welcome back</Text>
-            <Text style={s.subtitle}>Sign in to your reading companion</Text>
+            <Text style={s.title}>{t.welcome_back}</Text>
+            <Text style={s.subtitle}>{t.sign_in_subtitle}</Text>
           </View>
 
           <Animated.View
@@ -233,7 +235,7 @@ export default function LoginScreen() {
               icon={
                 <Mail color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
               }
-              placeholder="Email address"
+              placeholder={t.email_address}
               value={email}
               onChangeText={(v) => {
                 setEmail(v);
@@ -248,7 +250,7 @@ export default function LoginScreen() {
               icon={
                 <Lock color={COLORS.textDisabled} size={18} strokeWidth={1.5} />
               }
-              placeholder="Password"
+              placeholder={t.password}
               value={password}
               onChangeText={(v) => {
                 setPassword(v);
@@ -300,22 +302,28 @@ export default function LoginScreen() {
                 >
                   {isLoading && <View style={s.submitDim} />}
                   <Text style={s.submitText}>
-                    {isLoading ? "Signing in…" : "Sign In"}
+                    {isLoading ? t.signing_in : t.sign_in}
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>
             </Animated.View>
           </Animated.View>
 
-          <TouchableOpacity onPress={() => router.push("/(auth)/register" as "/")} style={s.footerLink}>
+          <TouchableOpacity
+            onPress={() => router.push("/(auth)/register" as "/")}
+            style={s.footerLink}
+          >
             <Text style={s.footerText}>
-              Don't have an account?{" "}
-              <Text style={s.footerAccent}>Create one</Text>
+              {t.dont_have_account}{" "}
+              <Text style={s.footerAccent}>{t.create_one}</Text>
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => router.push("/(auth)/forgot-password" as "/")} style={s.footerLink}>
-            <Text style={s.footerMuted}>Forgot your password?</Text>
+          <TouchableOpacity
+            onPress={() => router.push("/(auth)/forgot-password" as "/")}
+            style={s.footerLink}
+          >
+            <Text style={s.footerMuted}>{t.forgot_your_password}</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -427,7 +435,7 @@ const s = StyleSheet.create({
     elevation: 6,
   },
   submitDim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.35)",
     borderRadius: 14,
   },

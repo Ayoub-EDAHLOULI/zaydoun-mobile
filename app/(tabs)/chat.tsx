@@ -3,11 +3,13 @@ import { MessageCircle } from "lucide-react-native";
 import { useEffect, useRef } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useT } from "@/contexts/LanguageContext";
 import { conversationsService } from "@/lib/api/services/conversations.service";
 
 // When the user taps the Chat tab, send them straight to their most recent conversation.
 // If none exists, nudge them to the library to start one.
 export default function ChatTab() {
+  const t = useT();
   const didNavigate = useRef(false);
 
   useEffect(() => {
@@ -18,7 +20,7 @@ export default function ChatTab() {
         const list = await conversationsService.list();
         if (list.length > 0) {
           didNavigate.current = true;
-          router.replace(`/conversation/${list[0].id}` as "/");
+          router.push(`/conversation/${list[0].id}` as "/");
         }
         // If empty, fall through to the "no conversations" UI below
       } catch {
@@ -33,11 +35,8 @@ export default function ChatTab() {
         <View style={s.iconWrap}>
           <MessageCircle color="#6b6560" size={40} strokeWidth={1.2} />
         </View>
-        <Text style={s.title}>No conversations yet</Text>
-        <Text style={s.subtitle}>
-          Tap <Text style={s.highlight}>Discuss</Text> on a ready book in your
-          library to start talking with Zaydoun.
-        </Text>
+        <Text style={s.title}>{t.no_conversations_yet}</Text>
+        <Text style={s.subtitle}>{t.no_conversations_hint}</Text>
       </View>
     </SafeAreaView>
   );
