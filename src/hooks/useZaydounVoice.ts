@@ -124,29 +124,77 @@ function bestBookMatch(
 }
 
 // ---------------------------------------------------------------------------
-// Command regexes — English + Arabic
+// Command regexes — English + Arabic + known STT misreadings
 // ---------------------------------------------------------------------------
 
-// "open / discuss / talk about X" | "افتح / ابدأ / ناقش / تحدث عن X"
 const OPEN_RE =
-  /(?:open|start(?:\s+conversation(?:\s+on)?)?|discuss|talk\s+about|افتح(?:\s+كتاب)?|ابدأ(?:\s+(?:محادثة(?:\s+(?:عن|في|حول))?|كتاب))?|ناقش|تحدث\s+عن|حول)\s+(.+)/i;
+  /(?:open|start(?:\s+(?:a\s+)?conversation(?:\s+(?:on|about))?)?|discuss|talk\s+about|افتح(?:\s+كتاب)?|ابدأ(?:\s+(?:محادثة(?:\s+(?:عن|في|حول))?|كتاب))?|ناقش|تحدث\s+عن|حول)\s+(.+)/i;
 
+// "start recording" — also catches STT misreadings like "south dakota", "store cord"
 const RECORD_RE =
-  /\b(?:start\s+(?:an?\s+)?(?:audio|recording?)|record(?:ing)?|سجّل|سجل|ابدأ\s+(?:التسجيل|تسجيل))\b/i;
+  /\b(?:(?:start|begin|take|capture)\s+(?:an?\s+)?(?:audio|record(?:ing)?|voice\s*(?:note|message|memo)?)|record(?:ing)?\s*(?:now|start|begin)?|voice\s*(?:note|memo|message)|سجّل|سجل|ابدأ\s+(?:التسجيل|تسجيل))\b|\bsouth\s+dakota\b|\bstart\s+cord\b|\bstor[ek]\s+(?:cord|record)\b|\bstar\s+record\b/i;
 
+// "cancel / stop / abort the recording"
 const CANCEL_RECORD_RE =
-  /\b(?:cancel\s+(?:the\s+)?recording|stop\s+recording|إلغاء\s+التسجيل|أوقف\s+التسجيل|الغِ\s+التسجيل)\b/i;
+  /\b(?:cancel|stop|abort|delete|discard|drop|remove)\s+(?:the\s+)?(?:record(?:ing)?|audio|voice)\b|\bdon'?t\s+(?:send|record)\b|\b(?:cancel|abort)\s+(?:it|this|that)\b|إلغاء\s+التسجيل|أوقف\s+التسجيل|الغِ\s+التسجيل/i;
 
+// "send" — plus common homophones: sand, sent, scent
 const SEND_RE =
-  /\b(?:send(?:\s+(?:the\s+)?(?:audio|message|it))?|أرسل(?:\s+(?:الرسالة|الصوت|الصوتية))?)\b/i;
+  /\b(?:send|submit|transmit)(?:\s+(?:the\s+)?(?:audio|message|recording|voice|it|this|that))?\b|\bs[ae]nd(?:\s+(?:it|this|that|the|audio|message))?\b|\b(?:sent|scent)(?:\s+it)?\b|أرسل(?:\s+(?:الرسالة|الصوت|الصوتية))?/i;
 
+// "keyboard / type / write"
 const KEYBOARD_RE =
-  /\b(?:open\s+keyboard|show\s+keyboard|type(?:\s+(?:a\s+)?message)?|keyboard|اكتب|افتح\s+لوحة(?:\s+المفاتيح)?|لوحة\s+المفاتيح)\b/i;
+  /\b(?:(?:open|show|use|switch\s+to|bring\s+up)\s+(?:the\s+)?keyboard|keyboard|type(?:\s+(?:a\s+)?(?:message|text|something))?|write(?:\s+(?:a\s+)?(?:message|text))?|text\s+(?:input|mode)|key\s*bor(?:ed?|d))\b|اكتب|افتح\s+لوحة(?:\s+المفاتيح)?|لوحة\s+المفاتيح/i;
 
+// "go back / home" — "cobra" is a known STT misreading of "go back"
 const BACK_RE =
-  /\b(?:go\s+back|back(?:\s+(?:to\s+)?(?:home|library|previous))?|ارجع|رجوع|العودة)\b/i;
+  /\b(?:go\s+(?:back|home|to\s+(?:home|library|main|menu))|back(?:\s+(?:to\s+)?(?:home|library|previous|main|menu))?|return(?:\s+(?:to\s+)?(?:home|library))?|navigate\s+back|cobra)\b|ارجع|رجوع|العودة/i;
 
-const STOP_RE = /\b(?:stop|cancel|never\s*mind|quit|exit|توقف|إلغاء|اخرج)\b/i;
+// general stop / dismiss
+const STOP_RE =
+  /\b(?:stop|never\s*mind|quit|exit|dismiss|forget\s+it|that'?s\s+(?:all|it)|nothing)\b|توقف|إلغاء|اخرج/i;
+
+// ---------------------------------------------------------------------------
+// Phonetic fuzzy fallback — catches novel STT misreadings of short commands
+// Strips vowels + normalises digraphs, then measures edit distance on skeleton
+// ---------------------------------------------------------------------------
+
+function toPhonetic(word: string): string {
+  return word
+    .toLowerCase()
+    .replace(/[^a-z]/g, "")
+    .replace(/ck|qu/g, "k")
+    .replace(/ph/g, "f")
+    .replace(/gh/g, "g")
+    .replace(/th/g, "d")
+    .replace(/sh/g, "x")
+    .replace(/ch/g, "k")
+    .replace(/[aeiouy]/g, "")
+    .replace(/(.)\1+/g, "$1");
+}
+
+function fuzzyHasWord(
+  text: string,
+  targets: string[],
+  threshold = 0.38,
+): boolean {
+  const words = text
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, "")
+    .split(/\s+/)
+    .filter((w) => w.length > 2);
+  for (const w of words) {
+    const pw = toPhonetic(w);
+    if (pw.length < 3) continue; // too short — collision-prone (e.g. "book"↔"back" both → "bk")
+    for (const tgt of targets) {
+      const pt = toPhonetic(tgt);
+      if (pt.length < 3) continue;
+      if (levenshtein(pw, pt) / Math.max(pw.length, pt.length) <= threshold)
+        return true;
+    }
+  }
+  return false;
+}
 
 // ---------------------------------------------------------------------------
 // Hook
@@ -383,7 +431,9 @@ export function useZaydounVoice({
         returnToPassiveRef.current();
         return;
       }
-      // Open book — try prefix match first, then raw transcript as fallback
+
+      // Book match — always runs before fuzzy so "open the book X" never collides
+      // with command keywords (e.g. "book" → phonetic "bk" == "back" → "bk")
       const m = OPEN_RE.exec(raw);
       const query = m ? m[1].trim() : raw;
       const book = bestBookMatch(query, booksRef.current);
@@ -393,6 +443,43 @@ export function useZaydounVoice({
         setModeR.current("passive");
         router.push(`/conversation?bookId=${book.id}` as "/");
         scheduleRestartRef.current(2000);
+        return;
+      }
+
+      // Phonetic fuzzy fallback — only for short transcripts with no book match
+      // Min phonetic key length of 3 prevents short-word collisions
+      const wordCount = t.split(/\s+/).filter(Boolean).length;
+      if (wordCount <= 4) {
+        if (fuzzyHasWord(t, ["return", "library"])) {
+          onGoBackRef.current ? onGoBackRef.current() : router.back();
+          returnToPassiveRef.current();
+          return;
+        }
+        if (fuzzyHasWord(t, ["cancel", "abort", "delete", "discard"])) {
+          onCancelRef.current?.();
+          returnToPassiveRef.current();
+          return;
+        }
+        if (fuzzyHasWord(t, ["keyboard", "record", "recording"])) {
+          // distinguish: keyboard-like vs record-like by which target scored better
+          const isKeyboard = fuzzyHasWord(t, ["keyboard"]);
+          if (isKeyboard) {
+            onKeyboardRef.current?.();
+          } else {
+            onStartRef.current?.();
+          }
+          returnToPassiveRef.current();
+          return;
+        }
+        if (fuzzyHasWord(t, ["submit", "dispatch"])) {
+          onSendRef.current?.();
+          returnToPassiveRef.current();
+          return;
+        }
+        if (fuzzyHasWord(t, ["dismiss", "nothing"])) {
+          returnToPassiveRef.current();
+          return;
+        }
       }
     };
 

@@ -4,7 +4,9 @@ import { VoiceProvider } from "@/contexts/VoiceContext";
 import { useVoice } from "@/contexts/VoiceContext";
 import { setBackgroundColorAsync } from "expo-system-ui";
 import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
 import { Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Toast, {
@@ -14,6 +16,9 @@ import Toast, {
 } from "react-native-toast-message";
 
 setBackgroundColorAsync("#0d0d0d");
+
+// Keep splash visible until we explicitly hide it
+SplashScreen.preventAutoHideAsync();
 
 const toastConfig: ToastConfig = {
   success: (props) => (
@@ -113,6 +118,10 @@ function VoiceDebugOverlay() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <LanguageProvider>

@@ -337,7 +337,7 @@ const viz = StyleSheet.create({
 export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { replyLanguage } = useLanguage();
-  const { setRecordingCallbacks } = useVoice();
+  const { setRecordingCallbacks, setVoiceEnabled } = useVoice();
   const [conversation, setConversation] = useState<ConversationDetail | null>(
     null,
   );
@@ -352,11 +352,27 @@ export default function ConversationScreen() {
   const playerStatus = useAudioPlayerStatus(player);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const volumeAnim = useRef(new Animated.Value(0)).current;
-  const meteringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null,
-  );
+  const meteringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasSpokenRef = useRef(false);
+  const SILENCE_THRESHOLD_DB = -38; // dBFS — below this counts as silence
+  const SILENCE_SEND_MS = 1500;     // auto-send after 1.5s of continuous silence
+  const MAX_RECORD_MS = 30000;      // hard cap so it never runs forever
   const isPlayingAudio = playerStatus.playing;
   const flatListRef = useRef<FlatList>(null);
+
+  // Re-enable wake listener as soon as Zaydoun finishes speaking
+  const wasPlayingRef = useRef(false);
+  useEffect(() => {
+    if (wasPlayingRef.current && !isPlayingAudio) {
+      // Playback just ended — restore audio mode for recording then wake STT
+      setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true }).then(
+        () => setVoiceEnabled(true),
+      );
+    }
+    wasPlayingRef.current = isPlayingAudio;
+  }, [isPlayingAudio]);
 
   // Load conversation
   useEffect(() => {
@@ -412,6 +428,21 @@ export default function ConversationScreen() {
     [scrollToBottom],
   );
 
+  const clearRecordingTimers = () => {
+    if (autoSendTimerRef.current) {
+      clearTimeout(autoSendTimerRef.current);
+      autoSendTimerRef.current = null;
+    }
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    if (meteringIntervalRef.current) {
+      clearInterval(meteringIntervalRef.current);
+      meteringIntervalRef.current = null;
+    }
+  };
+
   // ── VOICE ──────────────────────────────────────────────
   const startRecording = async () => {
     try {
@@ -420,15 +451,19 @@ export default function ConversationScreen() {
         Toast.show({ type: "error", text1: "Microphone permission denied" });
         return;
       }
-      await setAudioModeAsync({
-        allowsRecording: true,
-        playsInSilentMode: true,
-      });
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await recorder.prepareToRecordAsync();
       recorder.record();
+      setVoiceEnabled(false);
       setRecordingState("recording");
+      hasSpokenRef.current = false;
 
-      // Poll metering every 80 ms while recording
+      // Hard cap — prevents recording forever if silence detection misses
+      autoSendTimerRef.current = setTimeout(() => {
+        stopAndSendRef.current();
+      }, MAX_RECORD_MS);
+
+      // Poll metering every 80ms — drives waveform + silence detection
       meteringIntervalRef.current = setInterval(() => {
         const status = recorder.getStatus();
         if (!status.isRecording) {
@@ -436,13 +471,30 @@ export default function ConversationScreen() {
           meteringIntervalRef.current = null;
           return;
         }
-        if (status.metering != null) {
-          Animated.timing(volumeAnim, {
-            toValue: dbToLevel(status.metering),
-            duration: 80,
-            easing: Easing.out(Easing.ease),
-            useNativeDriver: true,
-          }).start();
+        const db = status.metering ?? -160;
+
+        // Animate waveform bars
+        Animated.timing(volumeAnim, {
+          toValue: dbToLevel(db),
+          duration: 80,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }).start();
+
+        const isSpeaking = db > SILENCE_THRESHOLD_DB;
+
+        if (isSpeaking) {
+          // User is talking — mark as spoken, cancel any pending silence timer
+          hasSpokenRef.current = true;
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = null;
+          }
+        } else if (hasSpokenRef.current && !silenceTimerRef.current) {
+          // Silence detected after speech — start the send countdown
+          silenceTimerRef.current = setTimeout(() => {
+            stopAndSendRef.current();
+          }, SILENCE_SEND_MS);
         }
       }, 80);
     } catch {
@@ -452,10 +504,7 @@ export default function ConversationScreen() {
 
   const stopAndSend = async () => {
     if (!recorder.isRecording || !id) return;
-    if (meteringIntervalRef.current) {
-      clearInterval(meteringIntervalRef.current);
-      meteringIntervalRef.current = null;
-    }
+    clearRecordingTimers();
     setRecordingState("processing");
     try {
       await recorder.stop();
@@ -487,7 +536,8 @@ export default function ConversationScreen() {
 
       appendMessages(userMsg, result.aiMessage);
 
-      // Play AI audio response (data URI — no separate HTTP request needed)
+      // Disable wake listener during playback — re-enabled by the isPlayingAudio effect
+      setVoiceEnabled(false);
       await setAudioModeAsync({
         allowsRecording: false,
         playsInSilentMode: true,
@@ -500,6 +550,7 @@ export default function ConversationScreen() {
         text1: "Failed",
         text2: err instanceof Error ? err.message : "Could not process voice",
       });
+      setVoiceEnabled(true); // re-enable on error since playback never started
     } finally {
       setRecordingState("idle");
     }
@@ -507,15 +558,13 @@ export default function ConversationScreen() {
 
   const cancelRecording = async () => {
     if (!recorder.isRecording) return;
-    if (meteringIntervalRef.current) {
-      clearInterval(meteringIntervalRef.current);
-      meteringIntervalRef.current = null;
-    }
+    clearRecordingTimers();
     try {
       await recorder.stop();
     } catch {
       /* ignore */
     }
+    setVoiceEnabled(true); // hand mic back to wake listener
     setRecordingState("idle");
   };
 
@@ -726,7 +775,9 @@ export default function ConversationScreen() {
                   <VoiceBars volumeAnim={volumeAnim} />
                 </View>
 
-                <Text style={s.recordingHint}>Tap to stop</Text>
+                <Text style={s.recordingHint}>
+                  Tap to send · sends on silence
+                </Text>
               </View>
             ) : isPlayingAudio ? (
               <View style={s.idleRow}>
