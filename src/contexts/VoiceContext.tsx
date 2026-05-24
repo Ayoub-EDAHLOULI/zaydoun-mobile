@@ -18,24 +18,30 @@ import React, {
   useState,
 } from "react";
 import { AppState, AppStateStatus } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BookSummary } from "@/types/books.types";
 import { booksService } from "@/lib/api/services/books.service";
 import { useAuth } from "@/contexts/AuthContext";
 import { ZaydounVoiceState, useZaydounVoice } from "@/hooks/useZaydounVoice";
+
+const VOICE_MODE_KEY = "@zaydoun/voiceModeEnabled";
 
 // ---------------------------------------------------------------------------
 // Context shape
 // ---------------------------------------------------------------------------
 
 interface VoiceContextType extends ZaydounVoiceState {
-  /** Disable the voice listener (e.g. while a recording modal is open). */
   setVoiceEnabled: (enabled: boolean) => void;
-  /** Expose the current enabled flag so consumers can read it. */
   voiceEnabled: boolean;
-  /** Inject recording callbacks from the active screen. */
+  /** Persisted user preference — false = voice mode fully disabled */
+  voiceModeEnabled: boolean;
+  setVoiceModeEnabled: (enabled: boolean) => void;
   setRecordingCallbacks: (
     onStart: (() => void) | null,
     onSend: (() => void) | null,
+    onCancel?: (() => void) | null,
+    onKeyboard?: (() => void) | null,
+    onGoBack?: (() => void) | null,
   ) => void;
 }
 
@@ -51,6 +57,9 @@ function VoiceController({
   enabled,
   onStartRecording,
   onSendRecording,
+  onCancelRecording,
+  onShowKeyboard,
+  onGoBack,
   onStateChange,
   userName,
 }: {
@@ -58,6 +67,9 @@ function VoiceController({
   enabled: boolean;
   onStartRecording: (() => void) | null;
   onSendRecording: (() => void) | null;
+  onCancelRecording: (() => void) | null;
+  onShowKeyboard: (() => void) | null;
+  onGoBack: (() => void) | null;
   onStateChange: (s: ZaydounVoiceState) => void;
   userName: string;
 }) {
@@ -66,6 +78,9 @@ function VoiceController({
     enabled,
     onStartRecording: onStartRecording ?? undefined,
     onSendRecording: onSendRecording ?? undefined,
+    onCancelRecording: onCancelRecording ?? undefined,
+    onShowKeyboard: onShowKeyboard ?? undefined,
+    onGoBack: onGoBack ?? undefined,
     userName: userName,
     commandWindowMs: 7000,
   });
@@ -98,12 +113,32 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
 
   const [books, setBooks] = useState<BookSummary[]>([]);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voiceModeEnabled, setVoiceModeEnabledState] = useState(false); // off by default
+
+  // Load persisted preference
+  useEffect(() => {
+    AsyncStorage.getItem(VOICE_MODE_KEY).then((val) => {
+      if (val === "true") setVoiceModeEnabledState(true);
+    });
+  }, []);
+
+  const setVoiceModeEnabled = useCallback((enabled: boolean) => {
+    setVoiceModeEnabledState(enabled);
+    AsyncStorage.setItem(VOICE_MODE_KEY, String(enabled));
+  }, []);
   const [onStartRecording, setOnStartRecording] = useState<(() => void) | null>(
     null,
   );
   const [onSendRecording, setOnSendRecording] = useState<(() => void) | null>(
     null,
   );
+  const [onCancelRecording, setOnCancelRecording] = useState<
+    (() => void) | null
+  >(null);
+  const [onShowKeyboard, setOnShowKeyboard] = useState<(() => void) | null>(
+    null,
+  );
+  const [onGoBack, setOnGoBack] = useState<(() => void) | null>(null);
   const [voiceState, setVoiceState] = useState<ZaydounVoiceState>({
     mode: "passive",
     lastTranscript: "",
@@ -139,18 +174,27 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated]);
 
   const setRecordingCallbacks = useCallback(
-    (onStart: (() => void) | null, onSend: (() => void) | null) => {
-      // useState setters accept functions, so wrap in an outer function to
-      // prevent React treating them as updater functions.
+    (
+      onStart: (() => void) | null,
+      onSend: (() => void) | null,
+      onCancel?: (() => void) | null,
+      onKeyboard?: (() => void) | null,
+      onBack?: (() => void) | null,
+    ) => {
+      // useState setters accept functions, so wrap to prevent React treating
+      // them as updater functions.
       setOnStartRecording(() => onStart);
       setOnSendRecording(() => onSend);
+      setOnCancelRecording(() => onCancel ?? null);
+      setOnShowKeyboard(() => onKeyboard ?? null);
+      setOnGoBack(() => onBack ?? null);
     },
     [],
   );
 
   // Don't mount the Voice listener until authenticated — no point waking
   // up on login / onboarding screens
-  const active = isAuthenticated && voiceEnabled;
+  const active = isAuthenticated && voiceEnabled && voiceModeEnabled;
 
   return (
     <VoiceContext.Provider
@@ -158,6 +202,8 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         ...voiceState,
         voiceEnabled,
         setVoiceEnabled,
+        voiceModeEnabled,
+        setVoiceModeEnabled,
         setRecordingCallbacks,
       }}
     >
@@ -167,6 +213,9 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
           enabled={active}
           onStartRecording={onStartRecording}
           onSendRecording={onSendRecording}
+          onCancelRecording={onCancelRecording}
+          onShowKeyboard={onShowKeyboard}
+          onGoBack={onGoBack}
           onStateChange={setVoiceState}
           userName={user?.name?.split(" ")[0] || "my friend"}
         />

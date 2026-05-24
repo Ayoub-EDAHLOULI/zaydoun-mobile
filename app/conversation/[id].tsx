@@ -36,6 +36,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import { conversationsService } from "@/lib/api/services/conversations.service";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useVoice } from "@/contexts/VoiceContext";
 import { ConversationDetail, MessageData } from "@/types/conversations.types";
 
 const COLORS = {
@@ -336,6 +337,7 @@ const viz = StyleSheet.create({
 export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { replyLanguage } = useLanguage();
+  const { setRecordingCallbacks } = useVoice();
   const [conversation, setConversation] = useState<ConversationDetail | null>(
     null,
   );
@@ -549,6 +551,27 @@ export default function ConversationScreen() {
       setSending(false);
     }
   };
+
+  // Keep refs pointing to latest version of each callback — prevents stale closures
+  const startRecordingRef = useRef(startRecording);
+  const stopAndSendRef = useRef(stopAndSend);
+  const cancelRecordingRef = useRef(cancelRecording);
+  useEffect(() => { startRecordingRef.current = startRecording; });
+  useEffect(() => { stopAndSendRef.current = stopAndSend; });
+  useEffect(() => { cancelRecordingRef.current = cancelRecording; });
+
+  // Register stable wrappers with voice context once on mount
+  useEffect(() => {
+    setRecordingCallbacks(
+      () => startRecordingRef.current(),
+      () => stopAndSendRef.current(),
+      () => cancelRecordingRef.current(),
+      () => setShowTextInput(true),
+      () => router.back(),
+    );
+    return () => setRecordingCallbacks(null, null, null, null, null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isRecording = recordingState === "recording";
   const isProcessing = recordingState === "processing";

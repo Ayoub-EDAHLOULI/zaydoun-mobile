@@ -1,9 +1,18 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { BookOpen, Calendar, Languages, LogOut, Mail, User } from "lucide-react-native";
+import {
+  BookOpen,
+  Calendar,
+  Languages,
+  LogOut,
+  Mail,
+  Mic,
+  User,
+} from "lucide-react-native";
 import {
   Alert,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -11,6 +20,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
 import { LANGUAGES, useLanguage } from "@/contexts/LanguageContext";
+import { useVoice } from "@/contexts/VoiceContext";
 
 const COLORS = {
   background: "#0d0d0d",
@@ -49,6 +59,7 @@ function InfoRow({
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { replyLanguage, setReplyLanguage } = useLanguage();
+  const { voiceModeEnabled, setVoiceModeEnabled } = useVoice();
 
   const initials = user?.name
     ? user.name
@@ -149,12 +160,16 @@ export default function ProfileScreen() {
           <View style={s.card}>
             <View style={s.langHeader}>
               <View style={s.infoIcon}>
-                <Languages color={COLORS.textDisabled} size={16} strokeWidth={1.8} />
+                <Languages
+                  color={COLORS.textDisabled}
+                  size={16}
+                  strokeWidth={1.8}
+                />
               </View>
               <View style={s.infoText}>
                 <Text style={s.infoLabel}>Reply Language</Text>
                 <Text style={s.infoValue}>
-                  {replyLanguage.flag}  {replyLanguage.label}
+                  {replyLanguage.flag} {replyLanguage.label}
                 </Text>
               </View>
             </View>
@@ -179,6 +194,30 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                 );
               })}
+            </View>
+          </View>
+        </View>
+
+        {/* Voice Assistant */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Voice Assistant</Text>
+          <View style={s.card}>
+            <View style={s.infoRow}>
+              <View style={s.infoIcon}>
+                <Mic color={COLORS.textDisabled} size={16} strokeWidth={1.8} />
+              </View>
+              <View style={[s.infoText, { flex: 1 }]}>
+                <Text style={s.infoLabel}>Zaydoun Mode</Text>
+                <Text style={s.infoValue}>
+                  {voiceModeEnabled ? "Active — say «Zaydoun»" : "Disabled"}
+                </Text>
+              </View>
+              <Switch
+                value={voiceModeEnabled}
+                onValueChange={setVoiceModeEnabled}
+                trackColor={{ false: "#2a2a2a", true: "rgba(201,168,76,0.4)" }}
+                thumbColor={voiceModeEnabled ? COLORS.primary : "#4a4540"}
+              />
             </View>
           </View>
         </View>
