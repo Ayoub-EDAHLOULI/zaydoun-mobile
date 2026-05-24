@@ -2,19 +2,17 @@
  * useZaydounVoice
  *
  * Siri-style wake-word controller.
- * Uses @react-native-voice/voice for STT + expo-speech for TTS.
+ * Uses expo-speech-recognition for STT + expo-speech for TTS.
  *
  * State machine:
  *   passive  ──(wake word)──▶  acknowledging  ──(TTS done)──▶  command
  *   command  ──(action | stop | timeout)──▶  passive
- *
- * Requires a development build — does NOT run in Expo Go.
  */
 
-import Voice, {
-  SpeechResultsEvent,
-  SpeechErrorEvent,
-} from "@react-native-voice/voice";
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from "expo-speech-recognition";
 import * as Speech from "expo-speech";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -131,11 +129,9 @@ export function useZaydounVoice({
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // All mutable values live in refs so event handlers (registered once) always
-  // read the latest value without needing to re-register.
   const modeRef = useRef<VoiceMode>("passive");
   const isListeningRef = useRef(false);
-  const isSpeakingRef = useRef(false); // true while TTS is playing — block STT results
+  const isSpeakingRef = useRef(false);
   const commandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const booksRef = useRef(books);
@@ -145,7 +141,6 @@ export function useZaydounVoice({
   const userNameRef = useRef(userName);
   const commandWindowRef = useRef(commandWindowMs);
 
-  // Keep refs in sync with props
   useEffect(() => {
     booksRef.current = books;
   }, [books]);
@@ -166,260 +161,229 @@ export function useZaydounVoice({
   }, [commandWindowMs]);
 
   // -------------------------------------------------------------------------
-  // All logic lives inside a single effect that runs once on mount.
-  // Functions are defined inside so they close over stable refs only.
+  // STT helpers (called from event handlers and effects — stable via refs)
   // -------------------------------------------------------------------------
-  useEffect(() => {
-    // Guard: native module unavailable (Expo Go or missing link)
-    if (!Voice || typeof Voice.start !== "function") {
-      setError("Voice native module unavailable — use a dev build, not Expo Go");
+
+  const startListening = () => {
+    if (isListeningRef.current || isSpeakingRef.current || !enabledRef.current)
+      return;
+    ExpoSpeechRecognitionModule.requestPermissionsAsync().then(
+      ({ granted }) => {
+        if (!granted) {
+          setError("Microphone permission denied");
+          return;
+        }
+        try {
+          ExpoSpeechRecognitionModule.start({
+            lang: "en-US",
+            continuous: true,
+            interimResults: true,
+          });
+          isListeningRef.current = true;
+          setIsListening(true);
+          setError(null);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Voice start failed");
+        }
+      },
+    );
+  };
+
+  const abortListening = () => {
+    try {
+      ExpoSpeechRecognitionModule.abort();
+    } catch {
+      /* ignore */
+    }
+    isListeningRef.current = false;
+    setIsListening(false);
+  };
+
+  // -------------------------------------------------------------------------
+  // Timers
+  // -------------------------------------------------------------------------
+
+  const clearCommandTimer = () => {
+    if (commandTimerRef.current) {
+      clearTimeout(commandTimerRef.current);
+      commandTimerRef.current = null;
+    }
+  };
+
+  const clearRestartTimer = () => {
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+  };
+
+  const scheduleRestart = (delayMs: number) => {
+    clearRestartTimer();
+    restartTimerRef.current = setTimeout(() => {
+      if (
+        enabledRef.current &&
+        !isListeningRef.current &&
+        !isSpeakingRef.current &&
+        (modeRef.current === "passive" || modeRef.current === "command")
+      ) {
+        startListening();
+      }
+    }, delayMs);
+  };
+
+  // -------------------------------------------------------------------------
+  // State transitions
+  // -------------------------------------------------------------------------
+
+  const setModeRef = (m: VoiceMode) => {
+    modeRef.current = m;
+    setMode(m);
+  };
+
+  const returnToPassive = () => {
+    clearCommandTimer();
+    setModeRef("passive");
+    scheduleRestart(300);
+  };
+
+  const openCommandWindow = () => {
+    setModeRef("command");
+    clearCommandTimer();
+    startListening();
+    commandTimerRef.current = setTimeout(
+      returnToPassive,
+      commandWindowRef.current,
+    );
+  };
+
+  const handleWakeWord = () => {
+    if (modeRef.current !== "passive") return;
+    setModeRef("acknowledging");
+    clearCommandTimer();
+    abortListening();
+
+    isSpeakingRef.current = true;
+    Speech.speak(`Yes, ${userNameRef.current}?`, {
+      language: "en-US",
+      pitch: 1.05,
+      rate: 0.92,
+      onDone: () => {
+        isSpeakingRef.current = false;
+        openCommandWindow();
+      },
+      onStopped: () => {
+        isSpeakingRef.current = false;
+        openCommandWindow();
+      },
+      onError: () => {
+        isSpeakingRef.current = false;
+        openCommandWindow();
+      },
+    });
+  };
+
+  const handleCommand = (transcript: string) => {
+    const t = transcript.toLowerCase().trim();
+
+    if (STOP_RE.test(t)) {
+      returnToPassive();
+      return;
+    }
+    if (RECORD_RE.test(t)) {
+      onStartRef.current?.();
+      returnToPassive();
+      return;
+    }
+    if (SEND_RE.test(t)) {
+      onSendRef.current?.();
+      returnToPassive();
       return;
     }
 
-    // -- STT control --------------------------------------------------------
-
-    const startListening = async () => {
-      if (
-        isListeningRef.current ||
-        isSpeakingRef.current ||
-        !enabledRef.current
-      )
+    const m = OPEN_RE.exec(t);
+    if (m) {
+      const book = bestBookMatch(m[1].trim(), booksRef.current);
+      if (book) {
+        clearCommandTimer();
+        abortListening();
+        setModeRef("passive");
+        router.push(`/conversation?bookId=${book.id}` as "/");
+        scheduleRestart(2000);
         return;
-      try {
-        await Voice.destroy().catch(() => {});
-        isListeningRef.current = true;
-        setIsListening(true);
-        setError(null);
-        await Voice.start("en-US");
-      } catch (e) {
-        isListeningRef.current = false;
-        setIsListening(false);
-        setError(e instanceof Error ? e.message : "Voice start failed");
       }
-    };
+    }
+    // No match — keep the command window open
+  };
 
-    const stopListening = async () => {
-      if (!isListeningRef.current) return;
-      try {
-        await Voice.stop();
-        await Voice.destroy();
-      } catch {
-        /* already stopped */
-      }
-      isListeningRef.current = false;
-      setIsListening(false);
-    };
+  // -------------------------------------------------------------------------
+  // expo-speech-recognition events
+  // -------------------------------------------------------------------------
 
-    // -- Timers -------------------------------------------------------------
+  useSpeechRecognitionEvent("result", (event) => {
+    if (isSpeakingRef.current) return;
+    const transcript = event.results[0]?.transcript ?? "";
+    if (!transcript) return;
+    setLastTranscript(transcript);
+    if (modeRef.current === "passive") {
+      if (containsWakeWord(transcript)) handleWakeWord();
+    } else if (modeRef.current === "command") {
+      handleCommand(transcript);
+    }
+  });
 
-    const clearCommandTimer = () => {
-      if (commandTimerRef.current) {
-        clearTimeout(commandTimerRef.current);
-        commandTimerRef.current = null;
-      }
-    };
+  useSpeechRecognitionEvent("error", (event) => {
+    const code = String(event.error ?? "");
+    const benign = code === "no-speech" || code === "aborted";
+    if (!benign) setError(code);
+    isListeningRef.current = false;
+    setIsListening(false);
+    if (
+      enabledRef.current &&
+      (modeRef.current === "passive" || modeRef.current === "command")
+    ) {
+      scheduleRestart(benign ? 400 : 800);
+    }
+  });
 
-    const clearRestartTimer = () => {
-      if (restartTimerRef.current) {
-        clearTimeout(restartTimerRef.current);
-        restartTimerRef.current = null;
-      }
-    };
-
-    const scheduleRestart = (delayMs: number) => {
-      clearRestartTimer();
-      restartTimerRef.current = setTimeout(() => {
-        if (
-          enabledRef.current &&
-          !isListeningRef.current &&
-          !isSpeakingRef.current &&
-          (modeRef.current === "passive" || modeRef.current === "command")
-        ) {
-          startListening();
-        }
-      }, delayMs);
-    };
-
-    // -- State transitions --------------------------------------------------
-
-    const setModeRef = (m: VoiceMode) => {
-      modeRef.current = m;
-      setMode(m);
-    };
-
-    const returnToPassive = async () => {
-      clearCommandTimer();
-      setModeRef("passive");
+  useSpeechRecognitionEvent("end", () => {
+    isListeningRef.current = false;
+    setIsListening(false);
+    if (
+      enabledRef.current &&
+      (modeRef.current === "passive" || modeRef.current === "command")
+    ) {
       scheduleRestart(200);
-    };
+    }
+  });
 
-    const openCommandWindow = async () => {
-      setModeRef("command");
-      clearCommandTimer();
-      await startListening();
-      commandTimerRef.current = setTimeout(
-        returnToPassive,
-        commandWindowRef.current,
-      );
-    };
+  // -------------------------------------------------------------------------
+  // Mount: start listening + cleanup
+  // -------------------------------------------------------------------------
 
-    // -- Wake word ----------------------------------------------------------
-
-    const handleWakeWord = async () => {
-      if (modeRef.current !== "passive") return;
-      setModeRef("acknowledging");
-      clearCommandTimer();
-      await stopListening();
-
-      isSpeakingRef.current = true;
-      Speech.speak(`Yes, ${userNameRef.current}?`, {
-        language: "en-US",
-        pitch: 1.05,
-        rate: 0.92,
-        onDone: () => {
-          isSpeakingRef.current = false;
-          void openCommandWindow();
-        },
-        onStopped: () => {
-          isSpeakingRef.current = false;
-          void openCommandWindow();
-        },
-        onError: () => {
-          isSpeakingRef.current = false;
-          void openCommandWindow();
-        },
-      });
-    };
-
-    // -- Command parsing ----------------------------------------------------
-
-    const handleCommand = async (transcript: string) => {
-      const t = transcript.toLowerCase().trim();
-
-      if (STOP_RE.test(t)) {
-        await returnToPassive();
-        return;
-      }
-      if (RECORD_RE.test(t)) {
-        onStartRef.current?.();
-        await returnToPassive();
-        return;
-      }
-      if (SEND_RE.test(t)) {
-        onSendRef.current?.();
-        await returnToPassive();
-        return;
-      }
-
-      const m = OPEN_RE.exec(t);
-      if (m) {
-        const book = bestBookMatch(m[1].trim(), booksRef.current);
-        if (book) {
-          clearCommandTimer();
-          await stopListening();
-          setModeRef("passive");
-          // /conversation is the index gateway — pushes to the right conversation
-          router.push(`/conversation?bookId=${book.id}` as "/");
-          scheduleRestart(2000);
-          return;
-        }
-      }
-      // No match — keep the command window open, let the user try again
-    };
-
-    // -- Voice event handlers -----------------------------------------------
-
-    Voice.onSpeechResults = (e: SpeechResultsEvent) => {
-      if (isSpeakingRef.current) return; // ignore TTS echo
-      const transcript = e.value?.[0] ?? "";
-      if (!transcript) return;
-      setLastTranscript(transcript);
-      if (modeRef.current === "passive") {
-        if (containsWakeWord(transcript)) handleWakeWord();
-      } else if (modeRef.current === "command") {
-        void handleCommand(transcript);
-      }
-    };
-
-    Voice.onSpeechPartialResults = (e: SpeechResultsEvent) => {
-      if (isSpeakingRef.current) return; // ignore TTS echo
-      const transcript = e.value?.[0] ?? "";
-      if (!transcript) return;
-      setLastTranscript(transcript);
-      if (modeRef.current === "passive" && containsWakeWord(transcript)) {
-        void handleWakeWord();
-      }
-    };
-
-    Voice.onSpeechError = (e: SpeechErrorEvent) => {
-      const code = e.error?.code ?? "";
-      const msg = e.error?.message ?? "";
-      const benign =
-        code === "7" || code === "recognition_fail" || msg.includes("No match");
-      if (!benign) setError(msg);
-      isListeningRef.current = false;
-      setIsListening(false);
-      if (
-        enabledRef.current &&
-        (modeRef.current === "passive" || modeRef.current === "command")
-      ) {
-        scheduleRestart(benign ? 400 : 800);
-      }
-    };
-
-    Voice.onSpeechEnd = () => {
-      isListeningRef.current = false;
-      setIsListening(false);
-      if (
-        enabledRef.current &&
-        (modeRef.current === "passive" || modeRef.current === "command")
-      ) {
-        scheduleRestart(200);
-      }
-    };
-
-    // Start immediately
+  useEffect(() => {
     startListening();
-
     return () => {
       clearCommandTimer();
       clearRestartTimer();
       Speech.stop();
       isSpeakingRef.current = false;
-      Voice.onSpeechResults = () => {};
-      Voice.onSpeechPartialResults = () => {};
-      Voice.onSpeechError = () => {};
-      Voice.onSpeechEnd = () => {};
-      Voice.destroy().catch(() => {});
+      ExpoSpeechRecognitionModule.abort();
+      isListeningRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally empty — all logic reads current values via refs
+  }, []);
 
-  // React to enabled toggling at runtime
+  // React to enabled toggling
   useEffect(() => {
-    // We can't call startListening/stopListening here since they live inside
-    // the mount effect. Signal via enabledRef and let the scheduleRestart
-    // logic pick it up, OR use Voice directly for the disable case.
     if (!enabled) {
       Speech.stop();
       isSpeakingRef.current = false;
-      if (commandTimerRef.current) {
-        clearTimeout(commandTimerRef.current);
-        commandTimerRef.current = null;
-      }
-      if (restartTimerRef.current) {
-        clearTimeout(restartTimerRef.current);
-        restartTimerRef.current = null;
-      }
-      Voice.stop().catch(() => {});
-      Voice.destroy().catch(() => {});
-      isListeningRef.current = false;
-      setIsListening(false);
+      clearCommandTimer();
+      clearRestartTimer();
+      abortListening();
       modeRef.current = "passive";
       setMode("passive");
     }
-    // Re-enabling: the next scheduleRestart call inside the Voice handlers
-    // will restart listening automatically once enabledRef flips to true.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 

@@ -39,27 +39,15 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash.png",
-          "resizeMode": "cover",
+          "resizeMode": "contain",
           "backgroundColor": "#000000"
         }
       ],
-      "./plugins/withVoiceFix",
-      "@react-native-voice/voice",
+      "expo-speech-recognition",
       "expo-font",
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser",
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "newArchEnabled": false
-          },
-          "ios": {
-            "newArchEnabled": false
-          }
-        }
-      ]
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
