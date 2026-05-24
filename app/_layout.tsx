@@ -51,46 +51,61 @@ const toastConfig: ToastConfig = {
 };
 
 function VoiceDebugOverlay() {
-  const { mode, isListening, lastTranscript, error } = useVoice();
-  const modeColor =
-    mode === "passive"
-      ? "#555"
-      : mode === "acknowledging"
-        ? "#c9a84c"
-        : "#4caf7d";
+  const { mode, isListening, lastTranscript, voiceModeEnabled } = useVoice();
+  if (!voiceModeEnabled) return null;
+
+  const label =
+    mode === "acknowledging"
+      ? "Zaydoun is listening…"
+      : mode === "command"
+        ? "Awaiting your command…"
+        : isListening
+          ? "Say «Zaydoun» to begin"
+          : null;
+
+  if (!label && !lastTranscript) return null;
+
   return (
     <View
       style={{
         position: "absolute",
-        top: 50,
-        left: 12,
-        right: 12,
+        top: 52,
+        alignSelf: "center",
         zIndex: 9999,
-        backgroundColor: "rgba(0,0,0,0.82)",
-        borderRadius: 10,
-        padding: 10,
+        backgroundColor: "rgba(13,13,13,0.88)",
+        borderRadius: 20,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
         borderWidth: 1,
-        borderColor: modeColor,
+        borderColor:
+          mode === "passive" ? "rgba(201,168,76,0.2)" : "rgba(201,168,76,0.5)",
         pointerEvents: "none",
       }}
     >
-      <Text style={{ color: modeColor, fontSize: 11, fontWeight: "800" }}>
-        VOICE: {mode.toUpperCase()} {isListening ? "🎙 listening" : "🔇 idle"}
-      </Text>
-      {lastTranscript ? (
+      {label ? (
         <Text
-          style={{ color: "#aaa", fontSize: 10, marginTop: 3 }}
-          numberOfLines={2}
+          style={{
+            color: mode === "passive" ? "#6b6560" : "#c9a84c",
+            fontSize: 12,
+            fontWeight: "600",
+            letterSpacing: 0.3,
+          }}
         >
-          heard: "{lastTranscript}"
+          {label}
         </Text>
       ) : null}
-      {error ? (
+      {lastTranscript && mode !== "passive" ? (
         <Text
-          style={{ color: "#e05c5c", fontSize: 10, marginTop: 3 }}
+          style={{
+            color: "#c4bdb0",
+            fontSize: 11,
+            fontWeight: "500",
+            marginTop: label ? 2 : 0,
+            opacity: 0.8,
+          }}
           numberOfLines={1}
         >
-          err: {error}
+          {lastTranscript}
         </Text>
       ) : null}
     </View>

@@ -352,6 +352,9 @@ export default function ConversationScreen() {
   const playerStatus = useAudioPlayerStatus(player);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const volumeAnim = useRef(new Animated.Value(0)).current;
+  const meteringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
   const isPlayingAudio = playerStatus.playing;
   const flatListRef = useRef<FlatList>(null);
 
@@ -426,10 +429,11 @@ export default function ConversationScreen() {
       setRecordingState("recording");
 
       // Poll metering every 80 ms while recording
-      const meteringInterval = setInterval(() => {
+      meteringIntervalRef.current = setInterval(() => {
         const status = recorder.getStatus();
         if (!status.isRecording) {
-          clearInterval(meteringInterval);
+          clearInterval(meteringIntervalRef.current!);
+          meteringIntervalRef.current = null;
           return;
         }
         if (status.metering != null) {
@@ -448,6 +452,10 @@ export default function ConversationScreen() {
 
   const stopAndSend = async () => {
     if (!recorder.isRecording || !id) return;
+    if (meteringIntervalRef.current) {
+      clearInterval(meteringIntervalRef.current);
+      meteringIntervalRef.current = null;
+    }
     setRecordingState("processing");
     try {
       await recorder.stop();
@@ -499,6 +507,10 @@ export default function ConversationScreen() {
 
   const cancelRecording = async () => {
     if (!recorder.isRecording) return;
+    if (meteringIntervalRef.current) {
+      clearInterval(meteringIntervalRef.current);
+      meteringIntervalRef.current = null;
+    }
     try {
       await recorder.stop();
     } catch {
@@ -556,9 +568,15 @@ export default function ConversationScreen() {
   const startRecordingRef = useRef(startRecording);
   const stopAndSendRef = useRef(stopAndSend);
   const cancelRecordingRef = useRef(cancelRecording);
-  useEffect(() => { startRecordingRef.current = startRecording; });
-  useEffect(() => { stopAndSendRef.current = stopAndSend; });
-  useEffect(() => { cancelRecordingRef.current = cancelRecording; });
+  useEffect(() => {
+    startRecordingRef.current = startRecording;
+  });
+  useEffect(() => {
+    stopAndSendRef.current = stopAndSend;
+  });
+  useEffect(() => {
+    cancelRecordingRef.current = cancelRecording;
+  });
 
   // Register stable wrappers with voice context once on mount
   useEffect(() => {
@@ -570,7 +588,7 @@ export default function ConversationScreen() {
       () => router.back(),
     );
     return () => setRecordingCallbacks(null, null, null, null, null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isRecording = recordingState === "recording";
@@ -660,83 +678,85 @@ export default function ConversationScreen() {
         )}
 
         {/* Voice area — hidden while text input is open */}
-        {!showTextInput && <View style={s.voiceArea}>
-          {isProcessing ? (
-            <View style={s.processingWrap}>
-              <Text style={s.processingText}>Zaydoun is thinking…</Text>
-            </View>
-          ) : isRecording ? (
-            <View style={s.recordingRow}>
-              {/* Cancel */}
-              <TouchableOpacity
-                style={s.cancelBtn}
-                onPress={cancelRecording}
-                activeOpacity={0.75}
-              >
-                <MicOff color={COLORS.error} size={20} strokeWidth={2} />
-              </TouchableOpacity>
+        {!showTextInput && (
+          <View style={s.voiceArea}>
+            {isProcessing ? (
+              <View style={s.processingWrap}>
+                <Text style={s.processingText}>Zaydoun is thinking…</Text>
+              </View>
+            ) : isRecording ? (
+              <View style={s.recordingRow}>
+                {/* Cancel */}
+                <TouchableOpacity
+                  style={s.cancelBtn}
+                  onPress={cancelRecording}
+                  activeOpacity={0.75}
+                >
+                  <MicOff color={COLORS.error} size={20} strokeWidth={2} />
+                </TouchableOpacity>
 
-              {/* Mic + live waveform */}
-              <View style={s.micWithBars}>
-                <VoiceBars volumeAnim={volumeAnim} />
-                <Animated.View
-                  style={[
+                {/* Mic + live waveform */}
+                <View style={s.micWithBars}>
+                  <VoiceBars volumeAnim={volumeAnim} />
+                  <Animated.View
+                    style={[
+                      s.micOuter,
+                      s.micOuterRecording,
+                      { transform: [{ scale: pulseAnim }] },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={s.micInner}
+                      onPress={stopAndSend}
+                      activeOpacity={0.85}
+                    >
+                      <LinearGradient
+                        colors={["#e05c5c", "#b03e3e"]}
+                        style={s.micGradient}
+                      >
+                        <Square
+                          color="#fff"
+                          size={22}
+                          strokeWidth={2.5}
+                          fill="#fff"
+                        />
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </Animated.View>
+                  <VoiceBars volumeAnim={volumeAnim} />
+                </View>
+
+                <Text style={s.recordingHint}>Tap to stop</Text>
+              </View>
+            ) : isPlayingAudio ? (
+              <View style={s.idleRow}>
+                <PlaybackBars isPlaying={true} />
+                <Text style={s.playingHint}>Zaydoun is speaking…</Text>
+              </View>
+            ) : (
+              <View style={s.idleRow}>
+                <Text style={s.idleHint}>Hold to talk</Text>
+                <Pressable
+                  onPressIn={startRecording}
+                  style={({ pressed }) => [
                     s.micOuter,
-                    s.micOuterRecording,
-                    { transform: [{ scale: pulseAnim }] },
+                    pressed && { opacity: 0.85 },
                   ]}
                 >
-                  <TouchableOpacity
-                    style={s.micInner}
-                    onPress={stopAndSend}
-                    activeOpacity={0.85}
-                  >
+                  <View style={s.micInner}>
                     <LinearGradient
-                      colors={["#e05c5c", "#b03e3e"]}
+                      colors={[COLORS.primary, "#a07c30"]}
                       style={s.micGradient}
                     >
-                      <Square
-                        color="#fff"
-                        size={22}
-                        strokeWidth={2.5}
-                        fill="#fff"
-                      />
+                      <Mic color="#0d0d0d" size={26} strokeWidth={2.5} />
                     </LinearGradient>
-                  </TouchableOpacity>
-                </Animated.View>
-                <VoiceBars volumeAnim={volumeAnim} />
+                  </View>
+                </Pressable>
+                <Text style={s.idleHint}>with Zaydoun</Text>
               </View>
-
-              <Text style={s.recordingHint}>Tap to stop</Text>
-            </View>
-          ) : isPlayingAudio ? (
-            <View style={s.idleRow}>
-              <PlaybackBars isPlaying={true} />
-              <Text style={s.playingHint}>Zaydoun is speaking…</Text>
-            </View>
-          ) : (
-            <View style={s.idleRow}>
-              <Text style={s.idleHint}>Hold to talk</Text>
-              <Pressable
-                onPressIn={startRecording}
-                style={({ pressed }) => [
-                  s.micOuter,
-                  pressed && { opacity: 0.85 },
-                ]}
-              >
-                <View style={s.micInner}>
-                  <LinearGradient
-                    colors={[COLORS.primary, "#a07c30"]}
-                    style={s.micGradient}
-                  >
-                    <Mic color="#0d0d0d" size={26} strokeWidth={2.5} />
-                  </LinearGradient>
-                </View>
-              </Pressable>
-              <Text style={s.idleHint}>with Zaydoun</Text>
-            </View>
-          )}
-        </View>}
+            )}
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
