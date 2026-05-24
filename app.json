@@ -24,7 +24,6 @@
         "backgroundColor": "#0d0d0d"
       },
       "package": "com.ayoub.zaydoun",
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "navigationBarColor": "#0d0d0d",
       "navigationBarStyle": "dark",
@@ -44,6 +43,7 @@
           "backgroundColor": "#000000"
         }
       ],
+      "./plugins/withVoiceFix",
       "@react-native-voice/voice",
       "expo-font",
       "expo-image",
