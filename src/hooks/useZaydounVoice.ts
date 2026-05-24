@@ -43,23 +43,43 @@ export interface ZaydounVoiceState {
 // Wake-word patterns
 // ---------------------------------------------------------------------------
 
-const WAKE_PATTERNS = [
+// Exact / near-exact spellings (word-boundary anchored)
+const WAKE_PATTERNS_EXACT = [
   /\bzaydou?n\b/i,
   /\bzaidoo?n\b/i,
   /\bzaidun\b/i,
   /\bzay\s?dun\b/i,
-  /\bthey\s?done\b/i,
-  /\bthey\s?don'?t\b/i,
-  /\bsay\s?down\b/i,
-  /\bzey\s?don\b/i,
+  /\bzey\s?dou?n\b/i,
   /\bzeydun\b/i,
-  /\bzie\s?done\b/i,
-  /\bthey\s?down\b/i,
-  /\bthe\s?dawn\b/i,
+  /\bzie\s?done?\b/i,
+  /\bzay\s?done?\b/i,
+  /\bzadon\b/i,
+  /\bzadoun\b/i,
 ];
 
+// STT homophones — no word boundary needed, these phrases won't appear naturally
+const WAKE_PATTERNS_HOMOPHONE = [
+  /they\s?don'?t/i,
+  /they\s?dow?ne?\b/i,
+  /they\s?dawn/i,
+  /say\s?down/i,
+  /the\s?dawn/i,
+  /j['']?ai\s?done/i,
+  /\baid[ao]n\b/i,
+  /\bsay\s?dun\b/i,
+  /\bday\s?done?\b/i,
+  /\bday\s?dawn\b/i,
+];
+
+// Fuzzy syllable match: z/s/j + ay/ai/ey + d + o/a/u + n
+const WAKE_FUZZY = /\b[zsj]a?[iy]'?\s*d[aou]'?n\b/i;
+
 function containsWakeWord(text: string): boolean {
-  return WAKE_PATTERNS.some((re) => re.test(text));
+  const t = text.toLowerCase().trim();
+  if (WAKE_FUZZY.test(t)) return true;
+  if (WAKE_PATTERNS_EXACT.some((re) => re.test(t))) return true;
+  if (WAKE_PATTERNS_HOMOPHONE.some((re) => re.test(t))) return true;
+  return false;
 }
 
 // ---------------------------------------------------------------------------
