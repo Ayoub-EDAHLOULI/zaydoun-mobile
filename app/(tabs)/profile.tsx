@@ -9,7 +9,8 @@ import {
   User,
 } from "lucide-react-native";
 import {
-  Alert,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -21,6 +22,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/contexts/AuthContext";
 import { LANGUAGES, useLanguage } from "@/contexts/LanguageContext";
 import { useVoice } from "@/contexts/VoiceContext";
+import { useState } from "react";
 
 const COLORS = {
   background: "#0d0d0d",
@@ -77,12 +79,9 @@ export default function ProfileScreen() {
       })
     : "—";
 
-  const handleLogout = () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Sign Out", style: "destructive", onPress: () => logout() },
-    ]);
-  };
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const handleLogout = () => setShowLogoutModal(true);
 
   return (
     <SafeAreaView style={s.safe} edges={["top", "left", "right"]}>
@@ -234,6 +233,58 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Custom sign-out confirmation modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <Pressable
+          style={s.modalBackdrop}
+          onPress={() => setShowLogoutModal(false)}
+        >
+          <Pressable style={s.modalCard} onPress={() => {}}>
+            {/* Icon */}
+            <View style={s.modalIconWrap}>
+              <LogOut color={COLORS.error} size={22} strokeWidth={1.8} />
+            </View>
+
+            <Text style={s.modalTitle}>Sign Out</Text>
+            <Text style={s.modalBody}>
+              Are you sure you want to sign out of your account?
+            </Text>
+
+            {/* Buttons */}
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={s.modalCancelBtn}
+                onPress={() => setShowLogoutModal(false)}
+                activeOpacity={0.75}
+              >
+                <Text style={s.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={s.modalConfirmBtn}
+                onPress={() => { setShowLogoutModal(false); logout(); }}
+                activeOpacity={0.75}
+              >
+                <LinearGradient
+                  colors={["#e05c5c", "#b03e3e"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={s.modalConfirmGradient}
+                >
+                  <LogOut color="#fff" size={15} strokeWidth={2} />
+                  <Text style={s.modalConfirmText}>Sign Out</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -414,5 +465,88 @@ const s = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     letterSpacing: 0.3,
+  },
+
+  // ── Sign-out modal ──────────────────────────────────────
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+  },
+  modalCard: {
+    width: "100%",
+    backgroundColor: "#1a1a1a",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(224,92,92,0.18)",
+    padding: 28,
+    alignItems: "center",
+  },
+  modalIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "rgba(224,92,92,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(224,92,92,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+  modalTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+    marginBottom: 8,
+  },
+  modalBody: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontWeight: "500",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 28,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: COLORS.surfaceAlt,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCancelText: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  modalConfirmGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingVertical: 14,
+  },
+  modalConfirmText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
 });
