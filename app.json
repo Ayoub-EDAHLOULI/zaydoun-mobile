@@ -44,6 +44,7 @@
           "backgroundColor": "#000000"
         }
       ],
+      "@react-native-voice/voice",
       "expo-font",
       "expo-image",
       "expo-status-bar",
